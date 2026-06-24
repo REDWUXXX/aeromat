@@ -6,14 +6,17 @@
 
 import PyInstaller.__main__
 import os
-
+  # 修复Windows中文编码问题
+  if sys.platform == 'win32':
+      sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+      sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 params = [
     'main.py',
     '--onefile',
     '--windowed',
-    '--name=航材库存管理系统_v2.0',
+    '--name=areomat_v2.0',
     '--hidden-import=pandas',
     '--hidden-import=sqlite3',
     '--hidden-import=tkinter',
