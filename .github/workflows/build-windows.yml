@@ -30,7 +30,7 @@ jobs:
       shell: cmd
     
     - name: Upload EXE artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: 航材库存管理系统_v2.0
         path: dist/航材库存管理系统_v2.0.exe
