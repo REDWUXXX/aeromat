@@ -1326,9 +1326,9 @@ class AeroMatApp:
                     # 累加数量（同一件号+同一架位）
                     self.cursor.execute('''
                     UPDATE inventory SET total_quantity=total_quantity+?, updated_at=?,
-                                        description=COALESCE(NULLIF(description,''), excluded.description)
+                                        description=?
                     WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL))
-                    ''', (qty, now, part_number, location, location))
+                    ''', (qty, now, description, part_number, location, location))
                     skipped += 1
                 else:
                     # 插入新记录
