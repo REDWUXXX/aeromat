@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+打包脚本 - 航材库存管理系统 v2.0
+"""
+
+import PyInstaller.__main__
+import os
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+params = [
+    'main.py',
+    '--onefile',
+    '--windowed',
+    '--name=航材库存管理系统_v2.0',
+    '--hidden-import=pandas',
+    '--hidden-import=sqlite3',
+    '--hidden-import=tkinter',
+    '--collect-all=pandas',
+    '--distpath=./dist',
+    '--workpath=./build',
+    '--specpath=./',
+]
+
+print("=" * 60)
+print("航材库存管理系统 v2.0 - 打包脚本")
+print("=" * 60)
+print("\n开始打包...")
+print(f"参数: {' '.join(params)}\n")
+
+PyInstaller.__main__.run(params)
+
+print("\n" + "=" * 60)
+print("✅ 打包完成！")
+print(f"📁 exe文件位置: {os.path.abspath('./dist/航材库存管理系统_v2.0.exe')}")
+print("=" * 60)
