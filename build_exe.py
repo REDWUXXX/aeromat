@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-打包脚本 - 北京维护中心乘务航材管理 v3.0
-"""
 
 import PyInstaller.__main__
 import os
+import sys
+
+if sys.platform != 'win32':
+    import locale
+    locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -28,13 +30,13 @@ params = [
 ]
 
 print("=" * 60)
-print("北京维护中心乘务航材管理 v3.0 - 打包脚本")
+print("AeroMat v3.0 - Build Script")
 print("=" * 60)
-print("\n开始打包...\n")
+print("\nBuilding...\n")
 
 PyInstaller.__main__.run(params)
 
 print("\n" + "=" * 60)
-print("✅ 打包完成！")
-print(f"📁 exe文件位置: {os.path.abspath('./dist/AeroMat_v3.0.exe')}")
+print("Build complete!")
+print("Location: " + os.path.abspath("./dist/AeroMat_v3.0.exe"))
 print("=" * 60)
