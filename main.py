@@ -65,6 +65,11 @@ class AeroMatApp:
     def _setup_style(self):
         """全局样式配置"""
         style = ttk.Style(self.root)
+        # 强制使用 clam 主题以保证 macOS/Linux 样式一致性
+        try:
+            style.theme_use('clam')
+        except Exception:
+            pass
         self.root.configure(bg=CLR_BG)
 
         # ---- 按钮样式 ----
@@ -111,6 +116,10 @@ class AeroMatApp:
         style.map('Treeview',
             background=[('selected', '#DBEAFE')],
             foreground=[('selected', CLR_PRIMARY)])
+        # 强制表头前景色（防止 macOS 默认白色覆盖）
+        style.map('Treeview.Heading',
+            background=[('!active', CLR_HEADER_BG), ('active', '#1E40AF')],
+            foreground=[('!active', CLR_HEADER_FG), ('active', '#FFFFFF')])
 
         # ---- Frame / Label ----
         style.configure('Card.TFrame', background=CLR_CARD)
@@ -1489,7 +1498,210 @@ class AeroMatApp:
                 row=10 if trans[0] == 'IN' else 11,
                 column=0, columnspan=2, sticky=tk.W, padx=20, pady=2)
 
+        ttk.Button(dialog, text="📋 详细出入库记录", command=self.show_transaction_log).pack(
+            side=tk.LEFT, padx=(0, 10), pady=15)
         ttk.Button(dialog, text="关闭", command=dialog.destroy).pack(pady=15)
+
+    # ==================== 详细出入库记录 ====================
+    def show_transaction_log(self):
+        """详细出入库记录查询"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("📋 详细出入库记录")
+        dialog.geometry("1100x680")
+        dialog.configure(bg=CLR_BG)
+        dialog.grab_set()
+        dialog.transient(self.root)
+
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (1100 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (680 // 2)
+        dialog.geometry(f"1100x680+{x}+{y}")
+
+        # 顶部标题
+        hdr = tk.Frame(dialog, bg=CLR_HEADER_BG, height=48)
+        hdr.pack(fill=tk.X)
+        hdr.pack_propagate(False)
+        tk.Label(hdr, text="📋 详细出入库记录", font=('Arial', 14, 'bold'),
+                 bg=CLR_HEADER_BG, fg='white').pack(side=tk.LEFT, padx=16, pady=10)
+
+        # 筛选栏
+        filter_frame = tk.Frame(dialog, bg=CLR_CARD, bd=1, relief=tk.GROOVE)
+        filter_frame.pack(fill=tk.X, padx=14, pady=(14, 0))
+
+        tk.Label(filter_frame, text="类型:", font=('Arial', 10), bg=CLR_CARD).pack(side=tk.LEFT, padx=(12, 4), pady=10)
+        type_var = tk.StringVar(value='全部')
+        ttk.Combobox(filter_frame, textvariable=type_var, values=['全部', '入库', '出库'],
+                     state='readonly', width=8, font=('Arial', 10)).pack(side=tk.LEFT, padx=(0, 12), pady=10)
+
+        tk.Label(filter_frame, text="件号/描述:", font=('Arial', 10), bg=CLR_CARD).pack(side=tk.LEFT, padx=(0, 4), pady=10)
+        search_var = tk.StringVar()
+        search_ent = ttk.Entry(filter_frame, textvariable=search_var, width=16, font=('Arial', 10))
+        search_ent.pack(side=tk.LEFT, padx=(0, 12), pady=10)
+
+        tk.Label(filter_frame, text="近", font=('Arial', 10), bg=CLR_CARD).pack(side=tk.LEFT, padx=(0, 4), pady=10)
+        days_var = tk.StringVar(value='30')
+        days_combo = ttk.Combobox(filter_frame, textvariable=days_var,
+                                   values=['7', '30', '90', '365', '全部'],
+                                   state='readonly', width=6, font=('Arial', 10))
+        days_combo.pack(side=tk.LEFT, padx=(0, 4), pady=10)
+        tk.Label(filter_frame, text="天", font=('Arial', 10), bg=CLR_CARD).pack(side=tk.LEFT, padx=(0, 12), pady=10)
+
+        def do_filter():
+            self._refresh_log_tree(log_tree, type_var.get(), search_var.get(), days_var.get(), count_label)
+        def export_log():
+            self._export_transaction_log(type_var.get(), search_var.get(), days_var.get())
+
+        ttk.Button(filter_frame, text="🔍 查询", command=do_filter).pack(side=tk.LEFT, padx=(0, 6), pady=10)
+        ttk.Button(filter_frame, text="📥 导出Excel", command=export_log).pack(side=tk.LEFT, padx=(0, 6), pady=10)
+        count_label = tk.Label(filter_frame, text="", font=('Arial', 10, 'bold'),
+                                bg=CLR_CARD, fg=CLR_PRIMARY)
+        count_label.pack(side=tk.LEFT, padx=(8, 0), pady=10)
+
+        # 表格区
+        table_frame = tk.Frame(dialog, bg=CLR_CARD, bd=1, relief=tk.GROOVE)
+        table_frame.pack(fill=tk.BOTH, expand=True, padx=14, pady=(10, 0))
+
+        columns = ('日期时间', '类型', '件号', '描述', '架位', '数量', '经手人', '用途', '备注')
+        log_tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=22)
+
+        col_widths = {'日期时间': 150, '类型': 65, '件号': 130, '描述': 160, '架位': 80,
+                      '数量': 55, '经手人': 90, '用途': 120, '备注': 150}
+        for col in columns:
+            log_tree.heading(col, text=col,
+                             command=lambda c=col: self._sort_log_tree(log_tree, c))
+            log_tree.column(col, width=col_widths[col], anchor='center' if col != '备注' else 'w')
+
+        # 入库/出库 tag 颜色
+        log_tree.tag_configure('IN', background='#DCFCE7', foreground='#166534')
+        log_tree.tag_configure('OUT', background='#FEE2E2', foreground='#991B1B')
+        log_tree.tag_configure('oddrow', background=CLR_ROW_ODD)
+        log_tree.tag_configure('evenrow', background=CLR_ROW_EVEN)
+
+        scroll_y = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=log_tree.yview)
+        scroll_x = ttk.Scrollbar(table_frame, orient=tk.HORIZONTAL, command=log_tree.xview)
+        log_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+        log_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
+        scroll_x.pack(side=tk.BOTTOM, fill=tk.X)
+
+        # 初始加载
+        self._refresh_log_tree(log_tree, '全部', '', '30', count_label)
+
+        # 回车查询
+        search_ent.bind('<Return>', lambda e: do_filter())
+
+        # 底部按钮
+        btn_frame = tk.Frame(dialog, bg=CLR_CARD, height=48)
+        btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        btn_frame.pack_propagate(False)
+        ttk.Button(btn_frame, text="关闭", command=dialog.destroy).pack(side=tk.RIGHT, padx=12, pady=8)
+
+    def _sort_log_tree(self, tree, column):
+        """点击表头排序"""
+        data = [(tree.set(item, column), item) for item in tree.get_children('')]
+        try:
+            data.sort(key=lambda x: float(x[0]) if column == '数量' else x[0])
+        except Exception:
+            data.sort()
+        for index, (val, item) in enumerate(data):
+            tree.move(item, '', index)
+
+    def _refresh_log_tree(self, tree, trans_type, search, days, count_label):
+        """刷新出入库记录列表"""
+        for item in tree.get_children():
+            tree.delete(item)
+
+        # 构建查询
+        where = []
+        params = []
+        if trans_type != '全部':
+            where.append("trans_type = ?")
+            params.append('IN' if trans_type == '入库' else 'OUT')
+        if search:
+            where.append("(part_number LIKE ? OR description LIKE ? OR operator LIKE ?)")
+            params.extend([f'%{search}%', f'%{search}%', f'%{search}%'])
+        if days != '全部':
+            where.append(f"trans_date >= date('now', '-{days} days')")
+
+        where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+
+        self.cursor.execute(f'''
+            SELECT trans_date, trans_type, part_number, description,
+                   location, quantity, operator, purpose, remark
+            FROM transactions
+            {where_sql}
+            ORDER BY trans_date DESC, id DESC
+        ''', params)
+
+        rows = self.cursor.fetchall()
+        today = datetime.now()
+
+        for idx, row in enumerate(rows):
+            tag = 'oddrow' if idx % 2 == 0 else 'evenrow'
+            trans_type_disp = '✅ 入库' if row[1] == 'IN' else '📤 出库'
+            tree.insert('', tk.END, tags=(row[1], tag), values=(
+                row[0] or '',
+                trans_type_disp,
+                row[2] or '',
+                row[3] or '',
+                row[4] or '-',
+                f"{row[5]:.0f}" if row[5] is not None else '',
+                row[6] or '',
+                row[7] or '',
+                row[8] or ''
+            ))
+
+        total_in = sum(r[5] for r in rows if r[1] == 'IN' and r[5])
+        total_out = sum(r[5] for r in rows if r[1] == 'OUT' and r[5])
+        count_label.config(text=f"共 {len(rows)} 条 | 入库 {total_in:.0f} 件 | 出库 {total_out:.0f} 件")
+
+    def _export_transaction_log(self, trans_type, search, days):
+        """导出出入库记录到Excel"""
+        from tkinter import filedialog
+        file_path = filedialog.asksaveasfilename(
+            title="导出出入库记录",
+            defaultextension=".xlsx",
+            filetypes=[("Excel文件", "*.xlsx")],
+            initialfile=f"出入库记录_{datetime.now().strftime('%Y%m%d')}")
+        if not file_path:
+            return
+
+        where = []
+        params = []
+        if trans_type != '全部':
+            where.append("trans_type = ?")
+            params.append('IN' if trans_type == '入库' else 'OUT')
+        if search:
+            where.append("(part_number LIKE ? OR description LIKE ? OR operator LIKE ?)")
+            params.extend([f'%{search}%', f'%{search}%', f'%{search}%'])
+        if days != '全部':
+            where.append(f"trans_date >= date('now', '-{days} days')")
+
+        where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+
+        self.cursor.execute(f'''
+            SELECT trans_date as 日期时间,
+                   CASE trans_type WHEN 'IN' THEN '入库' ELSE '出库' END as 类型,
+                   part_number as 件号, description as 描述,
+                   location as 架位, quantity as 数量,
+                   operator as 经手人, purpose as 用途, remark as 备注
+            FROM transactions
+            {where_sql}
+            ORDER BY trans_date DESC, id DESC
+        ''', params)
+        rows = self.cursor.fetchall()
+
+        if not rows:
+            messagebox.showwarning("提示", "当前筛选条件下无记录")
+            return
+
+        import pandas as pd
+        df = pd.DataFrame(rows, columns=['日期时间', '类型', '件号', '描述', '架位', '数量', '经手人', '用途', '备注'])
+        try:
+            df.to_excel(file_path, index=False, engine='openpyxl')
+            messagebox.showinfo("成功", f"已导出 {len(rows)} 条记录到:\n{file_path}")
+        except Exception as e:
+            messagebox.showerror("错误", str(e))
 
     # ==================== Excel 导入（新版） ====================
     def import_excel(self):
