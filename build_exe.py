@@ -38,5 +38,5 @@ PyInstaller.__main__.run(params)
 
 print("\n" + "=" * 60)
 print("✅ 打包完成！")
-print(f"📁 exe文件位置: {os.path.abspath('./dist/航材库存管理系统_v2.0.exe')}")
+print(f"📁 exe文件位置: {os.path.abspath('./dist/areomat_v2.0.exe')}")
 print("=" * 60)
