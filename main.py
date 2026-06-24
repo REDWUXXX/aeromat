@@ -278,16 +278,16 @@ class AeroMatApp:
                  fg=CLR_SUBTEXT).grid(row=0, column=1, sticky='w', padx=(0, 8))
 
         self.search_var = tk.StringVar()
-        search_entry = ttk.Entry(search_card, textvariable=self.search_var, font=('Arial', 11))
+        search_entry = ttk.Entry(search_card, textvariable=self.search_var, font=('Arial', 11), width=24)
         search_entry.grid(row=0, column=1, sticky='ew', padx=(0, 8), pady=8)
         search_entry.bind('<KeyRelease>', lambda e: self.load_inventory())
 
-        ttk.Button(search_card, text="搜索", command=self.load_inventory,
-                   style='Action.TButton').grid(row=0, column=2, padx=(4, 4), pady=8)
-        ttk.Button(search_card, text="刷新", command=self.load_inventory,
-                   style='Action.TButton').grid(row=0, column=3, padx=(4, 8), pady=8)
-        ttk.Button(search_card, text="个体件详情", command=self.show_items_detail,
-                   style='Action.TButton').grid(row=0, column=4, padx=(4, 12), pady=8)
+        ttk.Button(search_card, text="搜索", command=self.load_inventory).grid(
+            row=0, column=2, padx=(4, 4), pady=8)
+        ttk.Button(search_card, text="刷新", command=self.load_inventory).grid(
+            row=0, column=3, padx=(4, 8), pady=8)
+        ttk.Button(search_card, text="个体件详情", command=self.show_items_detail).grid(
+            row=0, column=4, padx=(4, 12), pady=8)
 
         # === 库存表格卡片 ===
         table_card = tk.Frame(main_frame, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
@@ -325,16 +325,18 @@ class AeroMatApp:
         row1 = tk.Frame(btn_card, bg=CLR_CARD)
         row1.pack(fill=tk.X, padx=12, pady=(10, 4))
 
-        def make_btn(parent, text, cmd, style='Action.TButton'):
-            return ttk.Button(parent, text=text, command=cmd, style=style)
+        def plain_btn(parent, text, cmd):
+            b = ttk.Button(parent, text=text, command=cmd)
+            b.pack(side=tk.LEFT, padx=4)
+            return b
 
-        make_btn(row1, "➕ 新增航材", self.show_add_dialog).pack(side=tk.LEFT, padx=4)
-        make_btn(row1, "✏ 编辑航材", self.show_edit_dialog).pack(side=tk.LEFT, padx=4)
-        make_btn(row1, "🗑 删除航材", self.delete_item, 'Danger.TButton').pack(side=tk.LEFT, padx=4)
-        make_btn(row1, "📥 入库", self.show_in_dialog, 'Success.TButton').pack(side=tk.LEFT, padx=4)
-        make_btn(row1, "📤 出库", self.show_out_dialog, 'Action.TButton').pack(side=tk.LEFT, padx=4)
-        make_btn(row1, "📷 上传照片", self.show_photo_dialog).pack(side=tk.LEFT, padx=4)
-        make_btn(row1, "📊 统计分析", self.show_statistics).pack(side=tk.LEFT, padx=4)
+        plain_btn(row1, "➕ 新增航材", self.show_add_dialog)
+        plain_btn(row1, "✏ 编辑航材", self.show_edit_dialog)
+        plain_btn(row1, "🗑 删除航材", self.delete_item)
+        plain_btn(row1, "📥 入库", self.show_in_dialog)
+        plain_btn(row1, "📤 出库", self.show_out_dialog)
+        plain_btn(row1, "📷 上传照片", self.show_photo_dialog)
+        plain_btn(row1, "📊 统计分析", self.show_statistics)
 
         # === 状态栏 ===
         self.status_var = tk.StringVar(value="就绪")
@@ -416,35 +418,47 @@ class AeroMatApp:
     def show_add_dialog(self):
         """显示新增对话框"""
         dialog = tk.Toplevel(self.root)
-        dialog.title("新增航材")
-        dialog.geometry("500x700")
+        dialog.title("✚ 新增航材")
+        dialog.geometry("560x780")
+        dialog.configure(bg='#F1F5F9')
+        dialog.grab_set()
+        dialog.transient(self.root)
+
+        # 居中
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (560 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (780 // 2)
+        dialog.geometry(f"560x780+{x}+{y}")
+
+        # 列宽权重
+        dialog.columnconfigure(1, weight=1)
 
         fields = {}
         row = 0
 
-        self._add_field(dialog, fields, "件号 *", row, 0)
+        fields['件号'] = self._add_field(dialog, fields, "件号 *", row)
         fields['件号'].set('N/A')
         row += 1
 
-        self._add_field(dialog, fields, "描述 *", row, 1)
+        fields['描述'] = self._add_field(dialog, fields, "描述 *", row)
         row += 1
 
-        self._add_field(dialog, fields, "数量 *", row, 2)
+        fields['数量'] = self._add_field(dialog, fields, "数量 *", row)
         fields['数量'].set('1')
         row += 1
 
-        self._add_field(dialog, fields, "单位", row, 3)
+        fields['单位'] = self._add_field(dialog, fields, "单位", row)
         fields['单位'].set('个')
         row += 1
 
-        self._add_field(dialog, fields, "架位号", row, 4)
+        fields['架位号'] = self._add_field(dialog, fields, "架位号", row)
         row += 1
 
-        self._add_field(dialog, fields, "最低库存", row, 5)
+        fields['最低库存'] = self._add_field(dialog, fields, "最低库存", row)
         fields['最低库存'].set('0')
         row += 1
 
-        self._add_field(dialog, fields, "备注", row, 6)
+        fields['备注'] = self._add_field(dialog, fields, "备注", row)
         row += 1
 
         ttk.Separator(dialog, orient=tk.HORIZONTAL).grid(
@@ -456,11 +470,11 @@ class AeroMatApp:
             row=row, column=0, columnspan=2, pady=4)
         row += 1
 
-        self._add_field(dialog, fields, "件数量", row, 7)
+        fields['件数量'] = self._add_field(dialog, fields, "件数量", row)
         fields['件数量'].set('0')
         row += 1
 
-        self._add_field(dialog, fields, "有效期(YYYY-MM-DD)", row, 8)
+        fields['有效期'] = self._add_field(dialog, fields, "有效期(YYYY-MM-DD)", row)
         row += 1
 
         def save():
@@ -540,22 +554,21 @@ class AeroMatApp:
             except Exception as e:
                 messagebox.showerror("错误", str(e))
 
-        btn_row = tk.Frame(dialog, bg='#F8FAFC', height=52)
-        btn_row.grid(row=row, column=0, columnspan=2, sticky='ew')
+        btn_row = tk.Frame(dialog, bg="#F8FAFC", height=52)
+        btn_row.grid(row=row, column=0, columnspan=2, sticky="ew")
         btn_row.pack_propagate(False)
-        ttk.Button(btn_row, text="💾 保存", command=save,
-                   style='Success.TButton').pack(side=tk.LEFT, padx=12, pady=10)
-        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(
-            side=tk.LEFT, padx=8, pady=10)
+        ttk.Button(btn_row, text="💾 保存", command=save).pack(side=tk.LEFT, padx=12, pady=10)
+        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(side=tk.LEFT, padx=8, pady=10)
+        row += 1
 
-    def _add_field(self, dialog, fields, label, row, index):
+    def _add_field(self, dialog, fields, label, row, col_label=0, col_entry=1):
         """在对话框中添加标签+输入框"""
         ttk.Label(dialog, text=label).grid(
-            row=row, column=0, padx=10, pady=5, sticky=tk.W)
+            row=row, column=col_label, padx=10, pady=5, sticky=tk.W)
         var = tk.StringVar()
-        ttk.Entry(dialog, textvariable=var, width=30).grid(
-            row=row, column=1, padx=10, pady=5)
-        fields[index] = var
+        entry = ttk.Entry(dialog, textvariable=var, width=36)
+        entry.grid(row=row, column=col_entry, padx=10, pady=5, sticky=tk.EW)
+        return var
 
     # ==================== 编辑航材 ====================
     def show_edit_dialog(self):
@@ -580,8 +593,17 @@ class AeroMatApp:
             return
 
         dialog = tk.Toplevel(self.root)
-        dialog.title(f"编辑航材 - {part_number}")
-        dialog.geometry("500x550")
+        dialog.title(f"✏ 编辑航材 - {part_number}")
+        dialog.geometry("540x640")
+        dialog.configure(bg='#F1F5F9')
+        dialog.grab_set()
+        dialog.transient(self.root)
+
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (540 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (640 // 2)
+        dialog.geometry(f"540x640+{x}+{y}")
+        dialog.columnconfigure(1, weight=1)
 
         fields = {}
         row = 0
@@ -591,28 +613,35 @@ class AeroMatApp:
             row=row, column=0, columnspan=2, padx=10, pady=10)
         row += 1
 
-        self._add_field(dialog, fields, "描述", row, '描述')
+        fields['描述'] = self._add_field(dialog, fields, "描述", row)
         fields['描述'].set(record[2])
         row += 1
 
-        self._add_field(dialog, fields, "总数量", row, '数量')
+        fields['数量'] = self._add_field(dialog, fields, "总数量", row)
         fields['数量'].set(str(record[3]))
         row += 1
 
-        self._add_field(dialog, fields, "单位", row, '单位')
+        fields['单位'] = self._add_field(dialog, fields, "单位", row)
         fields['单位'].set(record[4] or '个')
         row += 1
 
-        self._add_field(dialog, fields, "架位号", row, '架位')
+        fields['架位'] = self._add_field(dialog, fields, "架位号", row)
         fields['架位'].set(record[5] or '')
         row += 1
 
-        self._add_field(dialog, fields, "最低库存", row, '最低')
+        fields['最低'] = self._add_field(dialog, fields, "最低库存", row)
         fields['最低'].set(str(record[6] or 0))
         row += 1
 
-        self._add_field(dialog, fields, "备注", row, '备注')
+        fields['备注'] = self._add_field(dialog, fields, "备注", row)
         fields['备注'].set(record[7] or '')
+        row += 1
+
+        btn_row = tk.Frame(dialog, bg="#F8FAFC", height=52)
+        btn_row.grid(row=row, column=0, columnspan=2, sticky="ew")
+        btn_row.pack_propagate(False)
+        ttk.Button(btn_row, text="💾 保存", command=save).pack(side=tk.LEFT, padx=12, pady=10)
+        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(side=tk.LEFT, padx=8, pady=10)
         row += 1
 
         def save():
@@ -665,14 +694,6 @@ class AeroMatApp:
             except Exception as e:
                 messagebox.showerror("错误", str(e))
 
-        btn_row = tk.Frame(dialog, bg='#F8FAFC', height=52)
-        btn_row.grid(row=row, column=0, columnspan=2, sticky='ew')
-        btn_row.pack_propagate(False)
-        ttk.Button(btn_row, text="💾 保存", command=save,
-                   style='Success.TButton').pack(side=tk.LEFT, padx=12, pady=10)
-        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(
-            side=tk.LEFT, padx=8, pady=10)
-
     # ==================== 删除航材 ====================
     def delete_item(self):
         """删除航材"""
@@ -723,17 +744,17 @@ class AeroMatApp:
 
         fields = {}
         row = 2
-        self._add_field(dialog, fields, "入库数量 *", row, '数量')
+        fields['数量'] = self._add_field(dialog, fields, "入库数量 *", row)
         row += 1
-        self._add_field(dialog, fields, "有效期(YYYY-MM-DD)", row, '有效期')
+        fields['有效期'] = self._add_field(dialog, fields, "有效期(YYYY-MM-DD)", row)
         row += 1
-        self._add_field(dialog, fields, "架位号", row, '架位')
+        fields['架位'] = self._add_field(dialog, fields, "架位号", row)
         if location:
             fields['架位'].set(location)
         row += 1
-        self._add_field(dialog, fields, "经手人", row, '经手人')
+        fields['经手人'] = self._add_field(dialog, fields, "经手人", row)
         row += 1
-        self._add_field(dialog, fields, "备注", row, '备注')
+        fields['备注'] = self._add_field(dialog, fields, "备注", row)
         row += 1
 
         def save():
@@ -796,10 +817,8 @@ class AeroMatApp:
         btn_row = tk.Frame(dialog, bg="#F8FAFC", height=52)
         btn_row.grid(row=row, column=0, columnspan=2, sticky="ew")
         btn_row.pack_propagate(False)
-        ttk.Button(btn_row, text="💾 确定入库", command=save,
-                   style="Success.TButton").pack(side=tk.LEFT, padx=12, pady=10)
-        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(
-            side=tk.LEFT, padx=8, pady=10)
+        ttk.Button(btn_row, text="💾 确定入库", command=save).pack(side=tk.LEFT, padx=12, pady=10)
+        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(side=tk.LEFT, padx=8, pady=10)
 
     # ==================== 出库 ====================
     def show_out_dialog(self):
@@ -912,10 +931,8 @@ class AeroMatApp:
         btn_row = tk.Frame(dialog, bg="#F8FAFC", height=52)
         btn_row.grid(row=row, column=0, columnspan=2, sticky="ew")
         btn_row.pack_propagate(False)
-        ttk.Button(btn_row, text="💾 确定出库", command=save,
-                   style="Action.TButton").pack(side=tk.LEFT, padx=12, pady=10)
-        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(
-            side=tk.LEFT, padx=8, pady=10)
+        ttk.Button(btn_row, text="💾 确定出库", command=save).pack(side=tk.LEFT, padx=12, pady=10)
+        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(side=tk.LEFT, padx=8, pady=10)
 
     # ==================== 个体件详情 ====================
     def show_items_detail(self):
@@ -1009,31 +1026,41 @@ class AeroMatApp:
         if not record:
             return
         dialog = tk.Toplevel(self.root)
-        dialog.title(f"编辑个体件 - {serial}")
-        dialog.geometry("420x400")
+        dialog.title(f"✏ 编辑个体件 - {serial}")
+        dialog.geometry("460x480")
+        dialog.configure(bg='#F1F5F9')
+        dialog.grab_set()
+        dialog.transient(self.root)
+
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (460 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (480 // 2)
+        dialog.geometry(f"460x480+{x}+{y}")
+        dialog.columnconfigure(1, weight=1)
         fields = {}
         row = 0
         ttk.Label(dialog, text=f"件序号: {serial}",
                  font=('Arial', 10, 'bold')).grid(row=row, column=0, columnspan=2, padx=10, pady=8)
         row += 1
-        self._add_field(dialog, fields, "架位号", row, '架位')
+        fields['架位'] = self._add_field(dialog, fields, "架位号", row)
         fields['架位'].set(record[2] or '')
         row += 1
-        self._add_field(dialog, fields, "有效期", row, '有效期')
+        fields['有效期'] = self._add_field(dialog, fields, "有效期", row)
         fields['有效期'].set(record[3] or '')
         row += 1
-        self._add_field(dialog, fields, "上次检查日期", row, '检查')
+        fields['检查'] = self._add_field(dialog, fields, "上次检查日期", row)
         fields['检查'].set(record[4] or '')
         row += 1
-        self._add_field(dialog, fields, "状态", row, '状态')
+        fields['状态'] = self._add_field(dialog, fields, "状态", row)
         fields['状态'].set(record[5])
         ttk.Combobox(dialog, textvariable=fields['状态'],
                     values=['正常', '已领用', '已过期', '已报废'], width=28).grid(
             row=row, column=1, padx=10, pady=5)
         row += 1
-        self._add_field(dialog, fields, "备注", row, '备注')
+        fields['备注'] = self._add_field(dialog, fields, "备注", row)
         fields['备注'].set(record[6] or '')
         row += 1
+
         def save():
             try:
                 shelf = fields['架位'].get().strip()
@@ -1052,8 +1079,11 @@ class AeroMatApp:
                 dialog.destroy()
             except Exception as e:
                 messagebox.showerror("错误", str(e))
-        ttk.Button(dialog, text="保存", command=save).grid(row=row, column=0, padx=10, pady=18)
-        ttk.Button(dialog, text="取消", command=dialog.destroy).grid(row=row, column=1, padx=10, pady=18)
+        btn_row = tk.Frame(dialog, bg="#F8FAFC", height=52)
+        btn_row.grid(row=row, column=0, columnspan=2, sticky="ew")
+        btn_row.pack_propagate(False)
+        ttk.Button(btn_row, text="💾 保存", command=save).pack(side=tk.LEFT, padx=12, pady=10)
+        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(side=tk.LEFT, padx=8, pady=10)
 
     # ==================== 照片管理 ====================
     def show_photo_dialog(self, part_number=None, location=None):
@@ -1069,10 +1099,16 @@ class AeroMatApp:
             location = item['values'][4] if item['values'][4] != '-' else None
 
         dialog = tk.Toplevel(self.root)
-        dialog.title(f"照片管理 - {part_number}")
-        dialog.geometry("1000x720")
+        dialog.title(f"📷 照片管理 - {part_number}")
+        dialog.geometry("1020x740")
         dialog.configure(bg=CLR_BG)
         dialog.grab_set()
+        dialog.transient(self.root)
+
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (1020 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (740 // 2)
+        dialog.geometry(f"1020x740+{x}+{y}")
 
         # 顶部标题条
         hdr = tk.Frame(dialog, bg=CLR_HEADER_BG, height=48)
@@ -1106,8 +1142,8 @@ class AeroMatApp:
             self._upload_photo(part_number, location)
             self._refresh_photo_view(wrapper, part_number, location, dialog)
 
-        ttk.Button(btn_frame, text="📷 上传照片", command=do_upload,
-                   style='Primary.TButton').pack(side=tk.LEFT, padx=12, pady=10)
+        ttk.Button(btn_frame, text="📷 上传照片", command=do_upload).pack(
+            side=tk.LEFT, padx=12, pady=10)
         ttk.Button(btn_frame, text="🔄 刷新", command=lambda: self._refresh_photo_view(
             wrapper, part_number, location, dialog)).pack(side=tk.LEFT, padx=4, pady=10)
         ttk.Button(btn_frame, text="✕ 关闭", command=dialog.destroy).pack(
@@ -1258,33 +1294,56 @@ class AeroMatApp:
         try:
             img = Image.open(file_path)
             win = tk.Toplevel(self.root)
-            win.title(os.path.basename(file_path))
-            win.configure(bg='#1a1a2e')
+            fname = os.path.basename(file_path)
 
             # 限制最大尺寸
             max_w, max_h = 1100, 800
             w, h = img.size
             ratio = min(max_w / w, max_h / h, 1)
             new_size = (int(w * ratio), int(h * ratio))
+
+            # 深色全屏背景窗口
+            win.configure(bg='#1a1a2e')
+            win.overrideredirect(True)  # 无标题栏全屏
+
+            # 居中
+            sw = win.winfo_screenwidth()
+            sh = win.winfo_screenheight()
+            win.geometry(f"{new_size[0]}x{new_size[1]}+"
+                         f"{(sw-new_size[0])//2}+{(sh-new_size[1])//2}")
+
             img_large = img.resize(new_size, Image.LANCZOS)
             photo = ImageTk.PhotoImage(img_large)
 
-            # 图片容器（Canvas 支持滚动查看大图）
-            cvs = tk.Canvas(win, bg='#1a1a2e', highlightthickness=0,
-                            width=new_size[0], height=new_size[1])
-            cvs.pack()
-            cvs.create_image(0, 0, anchor='nw', image=photo)
-            cvs.configure(scrollregion=cvs.bbox('all'))
+            # 透明遮罩层（接收点击关闭）
+            overlay = tk.Frame(win, bg='#1a1a2e', cursor='hand2')
+            overlay.pack(fill=tk.BOTH, expand=True)
+
+            # 图片
+            img_lbl = tk.Label(overlay, image=photo, bg='#1a1a2e')
+            img_lbl.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
             win._img_ref = photo
 
-            # 底部提示栏
-            tip = tk.Frame(win, bg='#16213e', height=30)
-            tip.pack(fill=tk.X, side=tk.BOTTOM)
-            tk.Label(tip, text=f"  {os.path.basename(file_path)}  |  点击任意处或按 ESC 关闭",
-                     font=('Arial', 9), bg='#16213e', fg='#94A3B8').pack(side=tk.LEFT, pady=5)
+            # 顶部栏：文件名 + 关闭按钮
+            topbar = tk.Frame(win, bg='#16213e', height=36, cursor='hand2')
+            topbar.pack(fill=tk.X, side=tk.TOP)
+            topbar.pack_propagate(False)
 
-            win.bind('<Button-1>', lambda e: win.destroy())
-            win.bind('<Escape>', lambda e: win.destroy())
+            tk.Label(topbar, text=f"  {fname}", font=('Arial', 9), bg='#16213e',
+                     fg='#94A3B8', anchor='w').pack(side=tk.LEFT, fill=tk.X, expand=True, pady=8)
+
+            close_btn = tk.Button(topbar, text='✕ 关闭', font=('Arial', 9, 'bold'),
+                                  bg='#16213e', fg='white', bd=0, padx=12,
+                                  cursor='hand2', command=win.destroy)
+            close_btn.pack(side=tk.RIGHT, pady=4, padx=4)
+
+            # 点击任意处 / ESC 关闭
+            def close_win(e=None):
+                win.destroy()
+
+            overlay.bind('<Button-1>', close_win)
+            img_lbl.bind('<Button-1>', close_win)
+            win.bind('<Escape>', close_win)
         except Exception as e:
             messagebox.showerror("错误", f"无法显示图片: {str(e)}")
 
