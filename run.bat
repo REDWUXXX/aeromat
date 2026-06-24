@@ -1,7 +1,5 @@
 @echo off
-REM 启动脚本 - Windows
-REM 用于直接运行Python版本
-
-echo 正在启动航材库存管理系统...
+chcp 65001 >nul
+echo 正在启动 北京维护中心乘务航材管理...
 python main.py
 pause
