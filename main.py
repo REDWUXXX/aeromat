@@ -5,7 +5,7 @@
 AeroMat Inventory Management System
 用于乘务航材消耗件管理
 
-Version: 3.0
+Version: 3.1
 """
 
 import tkinter as tk
@@ -17,8 +17,25 @@ import os
 import sys
 import shutil
 import hashlib
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw
 import io
+
+# ============================================================
+# 全局配色方案
+# ============================================================
+CLR_PRIMARY   = '#2563EB'   # 主色-蓝
+CLR_SUCCESS   = '#16A34A'   # 成功-绿
+CLR_DANGER    = '#DC2626'   # 危险-红
+CLR_WARNING   = '#D97706'   # 警告-橙
+CLR_BG        = '#F1F5F9'   # 页面背景浅灰
+CLR_CARD      = '#FFFFFF'   # 卡片白
+CLR_HEADER_BG = '#1E40AF'   # 顶部深蓝
+CLR_HEADER_FG = '#FFFFFF'   # 顶部文字白
+CLR_ROW_ODD   = '#F8FAFC'   # 奇数行淡灰
+CLR_ROW_EVEN  = '#FFFFFF'   # 偶数行白
+CLR_BORDER    = '#E2E8F0'   # 边框线
+CLR_TEXT      = '#1E293B'   # 主文字
+CLR_SUBTEXT   = '#64748B'   # 次要文字
 
 # 照片存储目录（程序运行目录下的 photos 文件夹）
 PHOTOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'photos')
@@ -28,10 +45,13 @@ class AeroMatApp:
     def __init__(self, root):
         self.root = root
         self.root.title("北京维护中心乘务航材管理")
-        self.root.geometry("1400x800")
+        self.root.geometry("1400x820")
 
         # 确保照片目录存在
         os.makedirs(PHOTOS_DIR, exist_ok=True)
+
+        # 样式初始化
+        self._setup_style()
 
         # 数据库初始化
         self.init_db()
@@ -41,6 +61,68 @@ class AeroMatApp:
 
         # 加载数据
         self.load_inventory()
+
+    def _setup_style(self):
+        """全局样式配置"""
+        style = ttk.Style(self.root)
+        self.root.configure(bg=CLR_BG)
+
+        # ---- 按钮样式 ----
+        style.configure('Primary.TButton',
+            font=('Arial', 10), padding=(12, 6),
+            background=CLR_PRIMARY, foreground='white')
+        style.map('Primary.TButton',
+            background=[('active', '#1D4ED8'), ('pressed', '#1E40AF')],
+            foreground=[('active', 'white'), ('pressed', 'white')])
+
+        style.configure('Success.TButton',
+            font=('Arial', 10), padding=(12, 6),
+            background=CLR_SUCCESS)
+        style.map('Success.TButton',
+            background=[('active', '#15803D'), ('pressed', '#166534')])
+
+        style.configure('Danger.TButton',
+            font=('Arial', 10), padding=(12, 6),
+            background=CLR_DANGER, foreground='white')
+        style.map('Danger.TButton',
+            background=[('active', '#B91C1C'), ('pressed', '#991B1B')])
+
+        style.configure('Action.TButton',
+            font=('Arial', 9), padding=(10, 4),
+            background=CLR_PRIMARY, foreground='white')
+        style.map('Action.TButton',
+            background=[('active', '#1D4ED8')])
+
+        style.configure('Flat.TButton',
+            font=('Arial', 9), padding=(8, 4))
+
+        # ---- Treeview 样式 ----
+        style.configure('Treeview',
+            background=CLR_CARD,
+            foreground=CLR_TEXT,
+            fieldbackground=CLR_CARD,
+            rowheight=28,
+            font=('Arial', 10))
+        style.configure('Treeview.Heading',
+            background=CLR_HEADER_BG,
+            foreground=CLR_HEADER_FG,
+            font=('Arial', 10, 'bold'),
+            padding=(8, 6))
+        style.map('Treeview',
+            background=[('selected', '#DBEAFE')],
+            foreground=[('selected', CLR_PRIMARY)])
+
+        # ---- Frame / Label ----
+        style.configure('Card.TFrame', background=CLR_CARD)
+        style.configure('Title.TLabel',
+            font=('Arial', 14, 'bold'),
+            foreground=CLR_TEXT, background=CLR_BG)
+        style.configure('Sub.TLabel',
+            font=('Arial', 9),
+            foreground=CLR_SUBTEXT, background=CLR_BG)
+        style.configure('Badge.TLabel',
+            font=('Arial', 8),
+            foreground='white', background=CLR_PRIMARY)
 
     def init_db(self):
         """初始化数据库"""
@@ -59,8 +141,7 @@ class AeroMatApp:
             min_stock REAL DEFAULT 0,
             remark TEXT,
             created_at TEXT,
-            updated_at TEXT,
-            UNIQUE(part_number, location)
+            updated_at TEXT
         )
         ''')
 
@@ -156,37 +237,65 @@ class AeroMatApp:
         query_menu.add_separator()
         query_menu.add_command(label="统计分析", command=self.show_statistics)
 
-        # 主框架
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        # ---- 顶部深蓝标题栏（Canvas 模拟渐变背景） ----
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(0, weight=1)
 
-        # === 标题栏 ===
-        title_frame = ttk.Frame(main_frame)
-        title_frame.grid(row=0, column=0, columnspan=2, pady=(0, 5))
-        ttk.Label(title_frame, text="北京维护中心乘务航材管理",
-                 font=('Arial', 14, 'bold')).pack()
+        header_canvas = tk.Canvas(self.root, height=52, bg=CLR_HEADER_BG,
+                                   highlightthickness=0, cursor='arrow')
+        header_canvas.grid(row=0, column=0, sticky=(tk.W, tk.E))
 
-        # === 搜索框 ===
-        search_frame = ttk.Frame(main_frame)
-        search_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        # 画渐变：从深蓝到稍浅蓝
+        w = 1400  # 近似最大宽度
+        for x in range(w):
+            ratio = x / w
+            r = int(30 + ratio * 10)
+            g = int(64 + ratio * 15)
+            b = int(175 + ratio * 10)
+            header_canvas.create_line(x, 0, x, 52, fill='#%02X%02X%02X' % (r, g, b))
 
-        ttk.Label(search_frame, text="搜索:").pack(side=tk.LEFT, padx=5)
+        header_canvas.create_text(22, 26, text="✈  北京维护中心乘务航材管理",
+                                   font=('Arial', 16, 'bold'),
+                                   fill='white', anchor='w')
+        header_canvas.create_text(22, 44, text="  AeroMat v3.1  |  航材精细化管理",
+                                   font=('Arial', 9),
+                                   fill='#BFDBFE', anchor='w')
+
+        # 主框架（标题栏下方）
+        main_frame = ttk.Frame(self.root, padding="12")
+        main_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame.configure(style='Card.TFrame')
+
+        # === 搜索框卡片 ===
+        search_card = tk.Frame(main_frame, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
+                                highlightthickness=1, highlightcolor=CLR_BORDER)
+        search_card.pack(fill=tk.X, pady=(0, 10))
+        search_card.columnconfigure(1, weight=1)
+
+        tk.Label(search_card, text="🔍", font=('Arial', 14), bg=CLR_CARD).grid(
+            row=0, column=0, padx=(12, 4), pady=10, sticky='e')
+        tk.Label(search_card, text="搜索航材", font=('Arial', 9), bg=CLR_CARD,
+                 fg=CLR_SUBTEXT).grid(row=0, column=1, sticky='w', padx=(0, 8))
+
         self.search_var = tk.StringVar()
-        search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=30)
-        search_entry.pack(side=tk.LEFT, padx=5)
+        search_entry = ttk.Entry(search_card, textvariable=self.search_var, font=('Arial', 11))
+        search_entry.grid(row=0, column=1, sticky='ew', padx=(0, 8), pady=8)
         search_entry.bind('<KeyRelease>', lambda e: self.load_inventory())
 
-        ttk.Button(search_frame, text="搜索", command=self.load_inventory).pack(side=tk.LEFT, padx=5)
-        ttk.Button(search_frame, text="刷新", command=self.load_inventory).pack(side=tk.LEFT, padx=5)
-        ttk.Button(search_frame, text="查看个体件",
-                  command=self.show_items_detail).pack(side=tk.LEFT, padx=15)
+        ttk.Button(search_card, text="搜索", command=self.load_inventory,
+                   style='Action.TButton').grid(row=0, column=2, padx=(4, 4), pady=8)
+        ttk.Button(search_card, text="刷新", command=self.load_inventory,
+                   style='Action.TButton').grid(row=0, column=3, padx=(4, 8), pady=8)
+        ttk.Button(search_card, text="个体件详情", command=self.show_items_detail,
+                   style='Action.TButton').grid(row=0, column=4, padx=(4, 12), pady=8)
 
-        # === 库存表格 ===
-        table_frame = ttk.Frame(main_frame)
-        table_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
+        # === 库存表格卡片 ===
+        table_card = tk.Frame(main_frame, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
+                               highlightthickness=1, highlightcolor=CLR_BORDER)
+        table_card.pack(fill=tk.BOTH, expand=True)
 
         columns = ('件号', '描述', '总数量', '单位', '架位号', '最低库存', '有效期提醒', '备注')
-        self.tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=22)
+        self.tree = ttk.Treeview(table_card, columns=columns, show='headings', height=22)
 
         col_widths = {
             '件号': 130, '描述': 200, '总数量': 75, '单位': 55,
@@ -197,34 +306,46 @@ class AeroMatApp:
             self.tree.column(col, width=col_widths[col],
                            anchor=tk.CENTER if col in ['总数量', '单位', '最低库存'] else tk.W)
 
-        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(1, 0), pady=1)
+        scrollbar = ttk.Scrollbar(table_card, orient=tk.VERTICAL, command=self.tree.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=1)
         self.tree.configure(yscrollcommand=scrollbar.set)
         self.tree.bind('<Double-1>', lambda e: self.show_items_detail())
 
-        # === 按钮区 ===
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=8)
+        # 隔行变色
+        self.tree.tag_configure('oddrow', background=CLR_ROW_ODD)
+        self.tree.tag_configure('evenrow', background=CLR_ROW_EVEN)
 
-        ttk.Button(button_frame, text="新增航材", command=self.show_add_dialog).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="编辑航材", command=self.show_edit_dialog).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="删除航材", command=self.delete_item).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="入库", command=self.show_in_dialog).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="出库", command=self.show_out_dialog).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="上传照片", command=self.show_photo_dialog).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="统计分析", command=self.show_statistics).pack(side=tk.LEFT, padx=5)
+        # === 按钮区 ===
+        btn_card = tk.Frame(main_frame, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
+                             highlightthickness=1, highlightcolor=CLR_BORDER)
+        btn_card.pack(fill=tk.X, pady=(10, 0))
+
+        # 第一行功能按钮
+        row1 = tk.Frame(btn_card, bg=CLR_CARD)
+        row1.pack(fill=tk.X, padx=12, pady=(10, 4))
+
+        def make_btn(parent, text, cmd, style='Action.TButton'):
+            return ttk.Button(parent, text=text, command=cmd, style=style)
+
+        make_btn(row1, "➕ 新增航材", self.show_add_dialog).pack(side=tk.LEFT, padx=4)
+        make_btn(row1, "✏ 编辑航材", self.show_edit_dialog).pack(side=tk.LEFT, padx=4)
+        make_btn(row1, "🗑 删除航材", self.delete_item, 'Danger.TButton').pack(side=tk.LEFT, padx=4)
+        make_btn(row1, "📥 入库", self.show_in_dialog, 'Success.TButton').pack(side=tk.LEFT, padx=4)
+        make_btn(row1, "📤 出库", self.show_out_dialog, 'Action.TButton').pack(side=tk.LEFT, padx=4)
+        make_btn(row1, "📷 上传照片", self.show_photo_dialog).pack(side=tk.LEFT, padx=4)
+        make_btn(row1, "📊 统计分析", self.show_statistics).pack(side=tk.LEFT, padx=4)
 
         # === 状态栏 ===
         self.status_var = tk.StringVar(value="就绪")
-        status_bar = ttk.Label(main_frame, textvariable=self.status_var,
-                              relief=tk.SUNKEN, anchor=tk.W)
-        status_bar.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        status_bar = tk.Label(main_frame, textvariable=self.status_var,
+                              bg=CLR_CARD, fg=CLR_SUBTEXT,
+                              font=('Arial', 9), anchor='w',
+                              padx=14, pady=6)
+        status_bar.pack(fill=tk.X, pady=(6, 0))
 
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
-        main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(2, weight=1)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(0, weight=1)
 
     # ==================== 数据加载 ====================
     def load_inventory(self):
@@ -262,7 +383,7 @@ class AeroMatApp:
         rows = self.cursor.fetchall()
         today = datetime.now()
 
-        for row in rows:
+        for idx, row in enumerate(rows):
             expiry = row[6]
             expiry_alert = ''
             if expiry:
@@ -282,7 +403,8 @@ class AeroMatApp:
                 except Exception:
                     expiry_alert = expiry
 
-            self.tree.insert('', tk.END, values=(
+            tag = 'oddrow' if idx % 2 == 0 else 'evenrow'
+            self.tree.insert('', tk.END, tags=(tag,), values=(
                 row[0], row[1], row[2], row[3],
                 row[4] if row[4] else '-',
                 row[5], expiry_alert, row[7] if row[7] else ''
@@ -295,7 +417,7 @@ class AeroMatApp:
         """显示新增对话框"""
         dialog = tk.Toplevel(self.root)
         dialog.title("新增航材")
-        dialog.geometry("450x580")
+        dialog.geometry("500x700")
 
         fields = {}
         row = 0
@@ -363,20 +485,25 @@ class AeroMatApp:
 
                 now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-                # 使用 INSERT OR REPLACE：件号+架位相同则更新数量
+                # 件号+架位相同则累加数量，不同则新增记录
                 self.cursor.execute('''
-                INSERT INTO inventory (part_number, description, total_quantity, unit,
-                                       location, min_stock, remark, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(part_number, location) DO UPDATE SET
-                    description=excluded.description,
-                    total_quantity=total_quantity + excluded.total_quantity,
-                    unit=excluded.unit,
-                    min_stock=excluded.min_stock,
-                    remark=excluded.remark,
-                    updated_at=excluded.updated_at
-                ''', (part_number, description, quantity, unit, location,
-                     min_stock, remark, now, now))
+                SELECT id, total_quantity FROM inventory
+                WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL))
+                ''', (part_number, location, location))
+                existing = self.cursor.fetchone()
+                if existing:
+                    self.cursor.execute('''
+                    UPDATE inventory SET description=?, total_quantity=total_quantity+?,
+                                        unit=?, min_stock=?, remark=?, updated_at=?
+                    WHERE id=?
+                    ''', (description, quantity, unit, min_stock, remark, now, existing[0]))
+                else:
+                    self.cursor.execute('''
+                    INSERT INTO inventory (part_number, description, total_quantity, unit,
+                                           location, min_stock, remark, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (part_number, description, quantity, unit, location,
+                         min_stock, remark, now, now))
 
                 # 获取该件号+架位的现有最大序号
                 self.cursor.execute('''
@@ -413,8 +540,13 @@ class AeroMatApp:
             except Exception as e:
                 messagebox.showerror("错误", str(e))
 
-        ttk.Button(dialog, text="保存", command=save).grid(row=row, column=0, padx=10, pady=20)
-        ttk.Button(dialog, text="取消", command=dialog.destroy).grid(row=row, column=1, padx=10, pady=20)
+        btn_row = tk.Frame(dialog, bg='#F8FAFC', height=52)
+        btn_row.grid(row=row, column=0, columnspan=2, sticky='ew')
+        btn_row.pack_propagate(False)
+        ttk.Button(btn_row, text="💾 保存", command=save,
+                   style='Success.TButton').pack(side=tk.LEFT, padx=12, pady=10)
+        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(
+            side=tk.LEFT, padx=8, pady=10)
 
     def _add_field(self, dialog, fields, label, row, index):
         """在对话框中添加标签+输入框"""
@@ -449,7 +581,7 @@ class AeroMatApp:
 
         dialog = tk.Toplevel(self.root)
         dialog.title(f"编辑航材 - {part_number}")
-        dialog.geometry("450x420")
+        dialog.geometry("500x550")
 
         fields = {}
         row = 0
@@ -495,24 +627,29 @@ class AeroMatApp:
 
                 # 如果架位变化，需要特殊处理
                 if (location or '') != (new_location or ''):
-                    # 删除当前记录，将数量转移
+                    # 删除当前记录
                     self.cursor.execute('''
                     DELETE FROM inventory WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL))
                     ''', (part_number, location, location))
-                    # 新架位
+                    # 新架位：先查是否存在
                     self.cursor.execute('''
-                    INSERT INTO inventory (part_number, description, total_quantity, unit, location,
-                                           min_stock, remark, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(part_number, location) DO UPDATE SET
-                        description=excluded.description,
-                        total_quantity=total_quantity + excluded.total_quantity,
-                        unit=excluded.unit,
-                        min_stock=excluded.min_stock,
-                        remark=excluded.remark,
-                        updated_at=excluded.updated_at
-                    ''', (part_number, description, total_qty, unit, new_location,
-                         min_stock, remark, record[8], now))
+                    SELECT id FROM inventory
+                    WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL))
+                    ''', (part_number, new_location, new_location))
+                    existing = self.cursor.fetchone()
+                    if existing:
+                        self.cursor.execute('''
+                        UPDATE inventory SET description=?, total_quantity=total_quantity+?,
+                                            unit=?, min_stock=?, remark=?, updated_at=?
+                        WHERE id=?
+                        ''', (description, total_qty, unit, min_stock, remark, now, existing[0]))
+                    else:
+                        self.cursor.execute('''
+                        INSERT INTO inventory (part_number, description, total_quantity, unit, location,
+                                               min_stock, remark, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (part_number, description, total_qty, unit, new_location,
+                             min_stock, remark, record[8], now))
                 else:
                     self.cursor.execute('''
                     UPDATE inventory SET description=?, total_quantity=?, unit=?,
@@ -528,8 +665,13 @@ class AeroMatApp:
             except Exception as e:
                 messagebox.showerror("错误", str(e))
 
-        ttk.Button(dialog, text="保存", command=save).grid(row=row, column=0, padx=10, pady=20)
-        ttk.Button(dialog, text="取消", command=dialog.destroy).grid(row=row, column=1, padx=10, pady=20)
+        btn_row = tk.Frame(dialog, bg='#F8FAFC', height=52)
+        btn_row.grid(row=row, column=0, columnspan=2, sticky='ew')
+        btn_row.pack_propagate(False)
+        ttk.Button(btn_row, text="💾 保存", command=save,
+                   style='Success.TButton').pack(side=tk.LEFT, padx=12, pady=10)
+        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(
+            side=tk.LEFT, padx=8, pady=10)
 
     # ==================== 删除航材 ====================
     def delete_item(self):
@@ -571,7 +713,7 @@ class AeroMatApp:
         location = values[4] if values[4] != '-' else None
 
         dialog = tk.Toplevel(self.root)
-        dialog.title(f"入库 - {part_number}")
+        dialog.title(f"📥 入库 - {part_number}")
         dialog.geometry("400x520")
 
         ttk.Label(dialog, text=f"件号: {part_number}",
@@ -651,8 +793,13 @@ class AeroMatApp:
             except Exception as e:
                 messagebox.showerror("错误", str(e))
 
-        ttk.Button(dialog, text="确定", command=save).grid(row=row, column=0, padx=10, pady=18)
-        ttk.Button(dialog, text="取消", command=dialog.destroy).grid(row=row, column=1, padx=10, pady=18)
+        btn_row = tk.Frame(dialog, bg="#F8FAFC", height=52)
+        btn_row.grid(row=row, column=0, columnspan=2, sticky="ew")
+        btn_row.pack_propagate(False)
+        ttk.Button(btn_row, text="💾 确定入库", command=save,
+                   style="Success.TButton").pack(side=tk.LEFT, padx=12, pady=10)
+        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(
+            side=tk.LEFT, padx=8, pady=10)
 
     # ==================== 出库 ====================
     def show_out_dialog(self):
@@ -679,7 +826,7 @@ class AeroMatApp:
             return
 
         dialog = tk.Toplevel(self.root)
-        dialog.title(f"出库 - {part_number}")
+        dialog.title(f"📤 出库 - {part_number}")
         dialog.geometry("520x620")
 
         ttk.Label(dialog, text=f"件号: {part_number} | 描述: {values[1]}",
@@ -762,8 +909,13 @@ class AeroMatApp:
             except Exception as e:
                 messagebox.showerror("错误", str(e))
 
-        ttk.Button(dialog, text="确定", command=save).grid(row=row, column=0, padx=10, pady=18)
-        ttk.Button(dialog, text="取消", command=dialog.destroy).grid(row=row, column=1, padx=10, pady=18)
+        btn_row = tk.Frame(dialog, bg="#F8FAFC", height=52)
+        btn_row.grid(row=row, column=0, columnspan=2, sticky="ew")
+        btn_row.pack_propagate(False)
+        ttk.Button(btn_row, text="💾 确定出库", command=save,
+                   style="Action.TButton").pack(side=tk.LEFT, padx=12, pady=10)
+        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(
+            side=tk.LEFT, padx=8, pady=10)
 
     # ==================== 个体件详情 ====================
     def show_items_detail(self):
@@ -918,39 +1070,55 @@ class AeroMatApp:
 
         dialog = tk.Toplevel(self.root)
         dialog.title(f"照片管理 - {part_number}")
-        dialog.geometry("800x600")
+        dialog.geometry("1000x720")
+        dialog.configure(bg=CLR_BG)
         dialog.grab_set()
 
-        # 顶部信息
-        ttk.Label(dialog, text=f"件号: {part_number} | 架位: {location or '全部'}",
-                 font=('Arial', 10, 'bold')).pack(pady=6)
+        # 顶部标题条
+        hdr = tk.Frame(dialog, bg=CLR_HEADER_BG, height=48)
+        hdr.pack(fill=tk.X)
+        hdr.pack_propagate(False)
+        tk.Label(hdr, text=f"📷 照片管理", font=('Arial', 14, 'bold'),
+                 bg=CLR_HEADER_BG, fg='white').pack(side=tk.LEFT, padx=16, pady=10)
+        tk.Label(hdr, text=f"件号: {part_number}  |  架位: {location or '全部'}",
+                 font=('Arial', 10), bg=CLR_HEADER_BG, fg='#93C5FD').pack(
+                     side=tk.RIGHT, padx=16, pady=10)
 
         # 照片展示区（带滚动条）
-        canvas_frame = ttk.Frame(dialog)
-        canvas_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        canvas_frame = tk.Frame(dialog, bg=CLR_BG)
+        canvas_frame.pack(fill=tk.BOTH, expand=True, padx=14, pady=10)
 
-        self._refresh_photo_view(canvas_frame, part_number, location, dialog)
+        # 提示文字
+        tk.Label(canvas_frame, text="💡 点击图片查看大图  |  点击 × 删除",
+                 font=('Arial', 9), bg=CLR_BG, fg=CLR_SUBTEXT).pack(anchor='w', pady=(0, 6))
+
+        wrapper = tk.Frame(canvas_frame, bg=CLR_BG)
+        wrapper.pack(fill=tk.BOTH, expand=True)
+
+        self._refresh_photo_view(wrapper, part_number, location, dialog)
 
         # 底部按钮
-        btn_frame = ttk.Frame(dialog)
-        btn_frame.pack(pady=8)
+        btn_frame = tk.Frame(dialog, bg=CLR_CARD, height=52)
+        btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        btn_frame.pack_propagate(False)
 
         def do_upload():
             self._upload_photo(part_number, location)
-            self._refresh_photo_view(canvas_frame, part_number, location, dialog)
+            self._refresh_photo_view(wrapper, part_number, location, dialog)
 
-        ttk.Button(btn_frame, text="📷 上传照片", command=do_upload).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="刷新", command=lambda: self._refresh_photo_view(
-            canvas_frame, part_number, location, dialog)).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="关闭", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="📷 上传照片", command=do_upload,
+                   style='Primary.TButton').pack(side=tk.LEFT, padx=12, pady=10)
+        ttk.Button(btn_frame, text="🔄 刷新", command=lambda: self._refresh_photo_view(
+            wrapper, part_number, location, dialog)).pack(side=tk.LEFT, padx=4, pady=10)
+        ttk.Button(btn_frame, text="✕ 关闭", command=dialog.destroy).pack(
+            side=tk.RIGHT, padx=12, pady=10)
 
     def _refresh_photo_view(self, canvas_frame, part_number, location, dialog):
         """刷新照片展示区"""
-        # 清除现有内容
         for widget in canvas_frame.winfo_children():
             widget.destroy()
 
-        canvas = tk.Canvas(canvas_frame, bg='#f0f0f0')
+        canvas = tk.Canvas(canvas_frame, bg=CLR_BG, highlightthickness=0)
         scrollbar_y = ttk.Scrollbar(canvas_frame, orient=tk.VERTICAL, command=canvas.yview)
         scrollbar_x = ttk.Scrollbar(canvas_frame, orient=tk.HORIZONTAL, command=canvas.xview)
         canvas.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
@@ -974,24 +1142,29 @@ class AeroMatApp:
         photos = self.cursor.fetchall()
 
         if not photos:
-            ttk.Label(canvas, text="暂无照片，点击「上传照片」添加",
-                     font=('Arial', 10), foreground='gray').pack(pady=40)
-            canvas.configure(scrollregion=(0, 0, 600, 100))
+            empty_frame = tk.Frame(canvas, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
+                                    width=400, height=120)
+            empty_frame.pack(pady=40)
+            empty_frame.pack_propagate(False)
+            tk.Label(empty_frame, text="📷", font=('Arial', 32), bg=CLR_CARD,
+                     fg=CLR_SUBTEXT).pack(pady=(20, 4))
+            tk.Label(empty_frame, text="暂无照片，点击上方「上传照片」添加",
+                     font=('Arial', 10), bg=CLR_CARD, fg=CLR_SUBTEXT).pack()
+            canvas.create_window(200, 60, window=empty_frame)
+            canvas.configure(scrollregion=(0, 0, 400, 150))
             return
 
-        # 每行3张，缩略图尺寸
-        THUMB_W = 180
-        THUMB_H = 160
-        COLS = 3
-        PAD = 10
+        # 每行4张，更大缩略图
+        THUMB_W = 220
+        THUMB_H = 200
+        COLS = 4
+        PAD = 12
 
         total_rows = (len(photos) + COLS - 1) // COLS
-        canvas_width = COLS * (THUMB_W + PAD * 2)
-        canvas_height = total_rows * (THUMB_H + 40 + PAD)
-
+        canvas_width  = COLS * (THUMB_W + PAD * 2)
+        canvas_height = total_rows * (THUMB_H + 50 + PAD)
         canvas.configure(scrollregion=(0, 0, canvas_width, canvas_height))
 
-        # 存储缩略图引用防止被垃圾回收
         dialog._thumbs = {}
 
         for idx, photo in enumerate(photos):
@@ -999,40 +1172,39 @@ class AeroMatApp:
             col = idx % COLS
             row = idx // COLS
             x = col * (THUMB_W + PAD * 2) + PAD
-            y = row * (THUMB_H + 40 + PAD) + PAD
+            y = row * (THUMB_H + 50 + PAD) + PAD
 
-            # 卡片背景
-            card = tk.Frame(canvas, bg='white', bd=1, relief=tk.RAISED)
-            canvas.create_window(x, y, window=card, width=THUMB_W, height=THUMB_H + 30)
+            # 卡片背景（圆角模拟）
+            card = tk.Frame(canvas, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
+                            highlightthickness=1, highlightcolor=CLR_BORDER,
+                            cursor='hand2')
+            canvas.create_window(x, y, window=card, width=THUMB_W,
+                                 height=THUMB_H + 40)
 
             # 缩略图
             try:
                 img = Image.open(file_path)
-                img.thumbnail((THUMB_W - 10, THUMB_H - 10), Image.LANCZOS)
+                img.thumbnail((THUMB_W - 8, THUMB_H - 8), Image.LANCZOS)
                 photo_img = ImageTk.PhotoImage(img)
-                dialog._thumbs[photo_id] = photo_img  # 保持引用
-                lbl = tk.Label(card, image=photo_img, cursor='hand2', bg='white')
+                dialog._thumbs[photo_id] = photo_img
+                img_lbl = tk.Label(card, image=photo_img, bg='#F8FAFC', cursor='hand2')
             except Exception:
-                lbl = tk.Label(card, text=f"[图片\n无法显示]", bg='#ddd',
-                             width=22, height=7, cursor='hand2')
+                img_lbl = tk.Label(card, text="图片\n无法显示",
+                                   bg='#F1F5F9', fg=CLR_SUBTEXT,
+                                   font=('Arial', 10), width=22, height=9,
+                                   cursor='hand2')
+            img_lbl.pack(pady=(6, 2))
+            img_lbl.bind('<Button-1>', lambda e, fp=file_path: self._view_full_photo(fp))
 
-            lbl.pack(pady=(4, 0))
+            # 文件名
+            fname = (file_name or os.path.basename(file_path))[:20]
+            tk.Label(card, text=fname, bg=CLR_CARD, fg=CLR_TEXT,
+                     font=('Arial', 8), anchor='w').pack(
+                         fill=tk.X, padx=6, pady=(0, 2))
 
-            # 点击查看大图
-            def view_full(fp=file_path):
-                self._view_full_photo(fp)
-
-            lbl.bind('<Button-1>', lambda e, fp=file_path: self._view_full_photo(fp))
-
-            # 文件名 + 删除按钮
-            info_frame = tk.Frame(card, bg='white')
-            info_frame.pack(fill=tk.X, pady=2)
-            fname = (file_name or os.path.basename(file_path))[:18]
-            tk.Label(info_frame, text=fname, bg='white', fg='#555',
-                   font=('Arial', 7)).pack(side=tk.LEFT)
-
+            # 删除按钮
             def delete_photo(pid=photo_id, fp=file_path, cfd=canvas_frame, loc=location):
-                if messagebox.askyesno("确认", "确定要删除这张照片吗？"):
+                if messagebox.askyesno("确认删除", "确定要删除这张照片吗？"):
                     try:
                         os.remove(fp)
                     except Exception:
@@ -1041,9 +1213,9 @@ class AeroMatApp:
                     self.conn.commit()
                     self._refresh_photo_view(cfd, part_number, loc, dialog)
 
-            tk.Button(info_frame, text='×', command=delete_photo,
-                     font=('Arial', 9), fg='red', bg='white',
-                     bd=0, width=2, height=1).pack(side=tk.RIGHT)
+            tk.Button(card, text='🗑', command=delete_photo,
+                     font=('Arial', 9), fg=CLR_DANGER, bg=CLR_CARD,
+                     bd=0, cursor='hand2', width=4).pack(side=tk.BOTTOM, pady=2)
 
     def _upload_photo(self, part_number, location):
         """上传照片"""
@@ -1087,15 +1259,30 @@ class AeroMatApp:
             img = Image.open(file_path)
             win = tk.Toplevel(self.root)
             win.title(os.path.basename(file_path))
+            win.configure(bg='#1a1a2e')
+
             # 限制最大尺寸
-            max_w, max_h = 900, 700
+            max_w, max_h = 1100, 800
             w, h = img.size
             ratio = min(max_w / w, max_h / h, 1)
             new_size = (int(w * ratio), int(h * ratio))
             img_large = img.resize(new_size, Image.LANCZOS)
             photo = ImageTk.PhotoImage(img_large)
-            tk.Label(win, image=photo, cursor='hand2').pack()
+
+            # 图片容器（Canvas 支持滚动查看大图）
+            cvs = tk.Canvas(win, bg='#1a1a2e', highlightthickness=0,
+                            width=new_size[0], height=new_size[1])
+            cvs.pack()
+            cvs.create_image(0, 0, anchor='nw', image=photo)
+            cvs.configure(scrollregion=cvs.bbox('all'))
             win._img_ref = photo
+
+            # 底部提示栏
+            tip = tk.Frame(win, bg='#16213e', height=30)
+            tip.pack(fill=tk.X, side=tk.BOTTOM)
+            tk.Label(tip, text=f"  {os.path.basename(file_path)}  |  点击任意处或按 ESC 关闭",
+                     font=('Arial', 9), bg='#16213e', fg='#94A3B8').pack(side=tk.LEFT, pady=5)
+
             win.bind('<Button-1>', lambda e: win.destroy())
             win.bind('<Escape>', lambda e: win.destroy())
         except Exception as e:
@@ -1315,32 +1502,16 @@ class AeroMatApp:
                     part_number = self._make_na_part_number(description, location)
                     na_items += 1
 
-                # 查询是否已存在（件号+架位号唯一）
+                # 每次 Excel 行都插入一条独立记录（不再合并）
                 self.cursor.execute('''
-                SELECT id, total_quantity FROM inventory
-                WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL))
-                ''', (part_number, location, location))
-                existing = self.cursor.fetchone()
+                INSERT OR IGNORE INTO inventory (part_number, description, total_quantity, unit,
+                                       location, remark, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (part_number, description, qty, unit or '个', location or None,
+                     remark, now, now))
+                imported += 1
 
-                if existing:
-                    # 累加数量（同一件号+同一架位）
-                    self.cursor.execute('''
-                    UPDATE inventory SET total_quantity=total_quantity+?, updated_at=?,
-                                        description=?
-                    WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL))
-                    ''', (qty, now, description, part_number, location, location))
-                    skipped += 1
-                else:
-                    # 插入新记录
-                    self.cursor.execute('''
-                    INSERT INTO inventory (part_number, description, total_quantity, unit,
-                                           location, remark, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (part_number, description, qty, unit or '个', location or None,
-                         remark, now, now))
-                    imported += 1
-
-                # 为该件号+架位生成个体件记录（每个Excel行生成对应数量的个体件）
+                # 为该件号+架位生成个体件记录
                 self.cursor.execute('''
                 SELECT MAX(serial_number) FROM inventory_items
                 WHERE part_number=? AND (location=? OR location IS NULL)
@@ -1365,9 +1536,9 @@ class AeroMatApp:
 
             message = (f"导入完成！\n"
                       f"✅ 新增记录: {imported} 条\n"
-                      f"🔄 累加数量: {skipped} 条（件号+架位已存在）\n"
+                      f"🔄 跳过（数量为0）: {skipped} 条\n"
                       f"📋 含N/A航材: {na_items} 条\n"
-                      f"💡 相同件号不同架位已正确导入为独立记录")
+                      f"💡 每行Excel独立导入，可重复件号+架位")
             messagebox.showinfo("导入成功", message)
             self.load_inventory()
 
