@@ -64,6 +64,18 @@ class AeroMatApp:
         )
         ''')
 
+        # 兼容旧版数据库：从 v2.0 升级时补齐缺失的列
+        for col_def in (
+            "ALTER TABLE inventory ADD COLUMN description TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE inventory ADD COLUMN total_quantity REAL DEFAULT 0",
+            "ALTER TABLE inventory ADD COLUMN unit TEXT DEFAULT '个'",
+            "ALTER TABLE inventory ADD COLUMN min_stock REAL DEFAULT 0",
+        ):
+            try:
+                self.cursor.execute(col_def)
+            except Exception:
+                pass  # 列已存在，忽略
+
         # 创建个体件表（每个具体件的追踪）
         self.cursor.execute('''
         CREATE TABLE IF NOT EXISTS inventory_items (
