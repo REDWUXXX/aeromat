@@ -6,8 +6,10 @@
 
 import PyInstaller.__main__
 import os
-  # 修复Windows中文编码问题
-  if sys.platform == 'win32':
+import sys
+import io
+# 修复Windows中文编码问题
+if sys.platform == 'win32':
       sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
       sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
