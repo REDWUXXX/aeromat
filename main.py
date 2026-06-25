@@ -266,9 +266,16 @@ class AeroMatApp:
         header_canvas.create_text(22, 26, text="✈  北京维护中心乘务航材管理",
                                    font=('Arial', 16, 'bold'),
                                    fill='white', anchor='w')
-        header_canvas.create_text(22, 44, text="  AeroMat v3.1  |  航材精细化管理",
+        header_canvas.create_text(22, 44, text="AeroMat v3.1  |  航材精细化管理",
                                    font=('Arial', 9),
                                    fill='#BFDBFE', anchor='w')
+        # 右下角版本信息
+        header_canvas.create_text(w - 22, 26, text="作者：吴凡",
+                                   font=('Arial', 9),
+                                   fill='#93C5FD', anchor='e')
+        header_canvas.create_text(w - 22, 44, text="2026.06  ver3.1",
+                                   font=('Arial', 8),
+                                   fill='#93C5FD', anchor='e')
 
         # 主框架（标题栏下方）
         main_frame = ttk.Frame(self.root, padding="12")
