@@ -246,36 +246,21 @@ class AeroMatApp:
         query_menu.add_separator()
         query_menu.add_command(label="统计分析", command=self.show_statistics)
 
-        # ---- 顶部深蓝标题栏（Canvas 模拟渐变背景） ----
+        # ---- 顶部深蓝标题栏 ----
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        self.root.rowconfigure(1, weight=1)  # 主框架可伸缩，标题栏固定
 
-        header_canvas = tk.Canvas(self.root, height=52, bg=CLR_HEADER_BG,
-                                   highlightthickness=0, cursor='arrow')
-        header_canvas.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        header_frame = tk.Frame(self.root, bg=CLR_HEADER_BG, height=52)
+        header_frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        header_frame.grid_propagate(False)  # 固定高度，不被内容撑开
+        header_frame.columnconfigure(0, weight=1)
 
-        # 画渐变：从深蓝到稍浅蓝
-        w = 1400  # 近似最大宽度
-        for x in range(w):
-            ratio = x / w
-            r = int(30 + ratio * 10)
-            g = int(64 + ratio * 15)
-            b = int(175 + ratio * 10)
-            header_canvas.create_line(x, 0, x, 52, fill='#%02X%02X%02X' % (r, g, b))
-
-        header_canvas.create_text(22, 26, text="✈  北京维护中心乘务航材管理",
-                                   font=('Arial', 16, 'bold'),
-                                   fill='white', anchor='w')
-        header_canvas.create_text(22, 44, text="AeroMat v3.1  |  航材精细化管理",
-                                   font=('Arial', 9),
-                                   fill='#BFDBFE', anchor='w')
-        # 右下角版本信息
-        header_canvas.create_text(w - 22, 26, text="作者：吴凡",
-                                   font=('Arial', 9),
-                                   fill='#93C5FD', anchor='e')
-        header_canvas.create_text(w - 22, 44, text="2026.06  ver3.1",
-                                   font=('Arial', 8),
-                                   fill='#93C5FD', anchor='e')
+        tk.Label(header_frame, text="✈  北京维护中心乘务航材管理",
+                 font=('Arial', 16, 'bold'),
+                 bg=CLR_HEADER_BG, fg='white').pack(side=tk.LEFT, padx=18, pady=12)
+        tk.Label(header_frame, text="作者：吴凡  |  2026.06  ver3.1",
+                 font=('Arial', 9),
+                 bg=CLR_HEADER_BG, fg='#93C5FD').pack(side=tk.RIGHT, padx=18, pady=12)
 
         # 主框架（标题栏下方）
         main_frame = ttk.Frame(self.root, padding="12")
