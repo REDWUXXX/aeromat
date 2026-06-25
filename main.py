@@ -267,6 +267,28 @@ class AeroMatApp:
         main_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         main_frame.configure(style='Card.TFrame')
 
+        # === 按钮区（固定在顶部） ===
+        btn_card = tk.Frame(main_frame, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
+                             highlightthickness=1, highlightcolor=CLR_BORDER)
+        btn_card.pack(fill=tk.X, pady=(0, 10))
+
+        # 第一行功能按钮
+        row1 = tk.Frame(btn_card, bg=CLR_CARD)
+        row1.pack(fill=tk.X, padx=12, pady=(10, 4))
+
+        def plain_btn(parent, text, cmd):
+            b = ttk.Button(parent, text=text, command=cmd)
+            b.pack(side=tk.LEFT, padx=4)
+            return b
+
+        plain_btn(row1, "➕ 新增航材", self.show_add_dialog)
+        plain_btn(row1, "✏ 编辑航材", self.show_edit_dialog)
+        plain_btn(row1, "🗑 删除航材", self.delete_item)
+        plain_btn(row1, "📥 入库", self.show_in_dialog)
+        plain_btn(row1, "📤 出库", self.show_out_dialog)
+        plain_btn(row1, "📷 上传照片", self.show_photo_dialog)
+        plain_btn(row1, "📊 统计分析", self.show_statistics)
+
         # === 搜索框卡片 ===
         search_card = tk.Frame(main_frame, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
                                 highlightthickness=1, highlightcolor=CLR_BORDER)
@@ -317,28 +339,6 @@ class AeroMatApp:
         self.tree.tag_configure('oddrow', background=CLR_ROW_ODD)
         self.tree.tag_configure('evenrow', background=CLR_ROW_EVEN)
 
-        # === 按钮区 ===
-        btn_card = tk.Frame(main_frame, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
-                             highlightthickness=1, highlightcolor=CLR_BORDER)
-        btn_card.pack(fill=tk.X, pady=(10, 0))
-
-        # 第一行功能按钮
-        row1 = tk.Frame(btn_card, bg=CLR_CARD)
-        row1.pack(fill=tk.X, padx=12, pady=(10, 4))
-
-        def plain_btn(parent, text, cmd):
-            b = ttk.Button(parent, text=text, command=cmd)
-            b.pack(side=tk.LEFT, padx=4)
-            return b
-
-        plain_btn(row1, "➕ 新增航材", self.show_add_dialog)
-        plain_btn(row1, "✏ 编辑航材", self.show_edit_dialog)
-        plain_btn(row1, "🗑 删除航材", self.delete_item)
-        plain_btn(row1, "📥 入库", self.show_in_dialog)
-        plain_btn(row1, "📤 出库", self.show_out_dialog)
-        plain_btn(row1, "📷 上传照片", self.show_photo_dialog)
-        plain_btn(row1, "📊 统计分析", self.show_statistics)
-
         # === 状态栏 ===
         self.status_var = tk.StringVar(value="就绪")
         status_bar = tk.Label(main_frame, textvariable=self.status_var,
@@ -347,10 +347,7 @@ class AeroMatApp:
                               padx=14, pady=6)
         status_bar.pack(fill=tk.X, pady=(6, 0))
 
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(0, weight=1)
-
-    # ==================== 数据加载 ====================
+    # ==================== 数据加载 ==================
     def load_inventory(self):
         """加载库存数据"""
         for item in self.tree.get_children():
