@@ -289,6 +289,7 @@ class AeroMatApp:
         plain_btn(row1, "📷 上传照片", self.show_photo_dialog)
         plain_btn(row1, "📊 统计分析", self.show_statistics)
         plain_btn(row1, "📋 出入库记录", self.show_transaction_log)
+        plain_btn(row1, "ℹ 关于", self.show_about)
 
         # === 搜索框卡片 ===
         search_card = tk.Frame(main_frame, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
@@ -336,6 +337,9 @@ class AeroMatApp:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=1)
         self.tree.configure(yscrollcommand=scrollbar.set)
         self.tree.bind('<Double-1>', lambda e: self.show_items_detail())
+
+        # 单击照片列打开图库
+        self.tree.bind('<ButtonRelease-1>', self._on_tree_click)
 
         # 隔行变色
         self.tree.tag_configure('oddrow', background=CLR_ROW_ODD)
@@ -955,6 +959,23 @@ class AeroMatApp:
         ttk.Button(btn_row, text="💾 确定出库", command=save).pack(side=tk.LEFT, padx=12, pady=10)
         ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(side=tk.LEFT, padx=8, pady=10)
 
+    # ==================== 主表格点击处理 ====================
+    def _on_tree_click(self, event):
+        """单击主表格：点到照片列就打开照片图库"""
+        region = self.tree.identify("region", event.x, event.y)
+        if region != "cell":
+            return
+        col = self.tree.identify_column(event.x)
+        # 照片列是第9列（#9），columns 索引从1开始
+        if col == "#9":
+            item = self.tree.identify_row(event.y)
+            if not item:
+                return
+            values = self.tree.item(item, "values")
+            part_number = values[0]
+            location = values[4] if values[4] != '-' else None
+            self.show_photo_dialog(part_number, location)
+
     # ==================== 个体件详情 ====================
     def show_items_detail(self):
         """显示个体件详情"""
@@ -1238,13 +1259,22 @@ class AeroMatApp:
             canvas.create_window(x, y, window=card, width=THUMB_W,
                                  height=THUMB_H + 40)
 
-            # 缩略图
+            # 缩略图（保持宽高比，居中）
             try:
                 img = Image.open(file_path)
-                img.thumbnail((THUMB_W - 8, THUMB_H - 8), Image.LANCZOS)
+                # 计算等比缩放
+                img_w, img_h = img.size
+                scale = min((THUMB_W - 16) / img_w, (THUMB_H - 16) / img_h, 1)
+                new_w, new_h = int(img_w * scale), int(img_h * scale)
+                img = img.resize((new_w, new_h), Image.LANCZOS)
                 photo_img = ImageTk.PhotoImage(img)
                 dialog._thumbs[photo_id] = photo_img
-                img_lbl = tk.Label(card, image=photo_img, bg='#F8FAFC', cursor='hand2')
+                # 用Frame居中显示图片
+                img_container = tk.Frame(card, bg='#F8FAFC', width=THUMB_W-8, height=THUMB_H-8)
+                img_container.pack(pady=4)
+                img_container.pack_propagate(False)
+                img_lbl = tk.Label(img_container, image=photo_img, bg='#F8FAFC', cursor='hand2')
+                img_lbl.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
             except Exception:
                 img_lbl = tk.Label(card, text="图片\n无法显示",
                                    bg='#F1F5F9', fg=CLR_SUBTEXT,
@@ -1311,62 +1341,167 @@ class AeroMatApp:
             messagebox.showerror("错误", f"上传失败: {str(e)}")
 
     def _view_full_photo(self, file_path):
-        """查看大图"""
+        """查看大图（正常窗口，ESC或点击关闭按钮）"""
         try:
             img = Image.open(file_path)
             win = tk.Toplevel(self.root)
             fname = os.path.basename(file_path)
+            win.title(f"照片查看 - {fname}")
 
-            # 限制最大尺寸
-            max_w, max_h = 1100, 800
+            # 限制最大尺寸，自适应屏幕
+            max_w, max_h = 1200, 850
+            sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+            max_w = min(max_w, int(sw * 0.85))
+            max_h = min(max_h, int(sh * 0.85))
             w, h = img.size
             ratio = min(max_w / w, max_h / h, 1)
             new_size = (int(w * ratio), int(h * ratio))
 
-            # 深色全屏背景窗口
-            win.configure(bg='#1a1a2e')
-            win.overrideredirect(True)  # 无标题栏全屏
-
-            # 居中
-            sw = win.winfo_screenwidth()
-            sh = win.winfo_screenheight()
-            win.geometry(f"{new_size[0]}x{new_size[1]}+"
-                         f"{(sw-new_size[0])//2}+{(sh-new_size[1])//2}")
-
             img_large = img.resize(new_size, Image.LANCZOS)
             photo = ImageTk.PhotoImage(img_large)
 
-            # 透明遮罩层（接收点击关闭）
-            overlay = tk.Frame(win, bg='#1a1a2e', cursor='hand2')
-            overlay.pack(fill=tk.BOTH, expand=True)
-
-            # 图片
-            img_lbl = tk.Label(overlay, image=photo, bg='#1a1a2e')
-            img_lbl.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-            win._img_ref = photo
-
             # 顶部栏：文件名 + 关闭按钮
-            topbar = tk.Frame(win, bg='#16213e', height=36, cursor='hand2')
+            topbar = tk.Frame(win, bg='#1e293b', height=40)
             topbar.pack(fill=tk.X, side=tk.TOP)
             topbar.pack_propagate(False)
 
-            tk.Label(topbar, text=f"  {fname}", font=('Arial', 9), bg='#16213e',
-                     fg='#94A3B8', anchor='w').pack(side=tk.LEFT, fill=tk.X, expand=True, pady=8)
+            tk.Label(topbar, text=f"  📷 {fname}", font=('Arial', 10),
+                     bg='#1e293b', fg='#94A3B8', anchor='w').pack(
+                         side=tk.LEFT, fill=tk.X, expand=True, pady=8)
 
             close_btn = tk.Button(topbar, text='✕ 关闭', font=('Arial', 9, 'bold'),
-                                  bg='#16213e', fg='white', bd=0, padx=12,
+                                  bg='#dc2626', fg='white', bd=0, padx=16, pady=4,
                                   cursor='hand2', command=win.destroy)
-            close_btn.pack(side=tk.RIGHT, pady=4, padx=4)
+            close_btn.pack(side=tk.RIGHT, pady=6, padx=8)
 
-            # 点击任意处 / ESC 关闭
+            # 图片区域（深色背景，点击也关闭）
+            img_frame = tk.Frame(win, bg='#0f172a')
+            img_frame.pack(fill=tk.BOTH, expand=True)
+
+            img_lbl = tk.Label(img_frame, image=photo, bg='#0f172a', cursor='hand2')
+            img_lbl.image = photo   # 防止GC
+            img_lbl.pack(pady=20)
+
+            # 绑定关闭事件
             def close_win(e=None):
                 win.destroy()
 
-            overlay.bind('<Button-1>', close_win)
-            img_lbl.bind('<Button-1>', close_win)
-            win.bind('<Escape>', close_win)
+            img_lbl.bind('<Button-1>', lambda e: close_win())
+            win.bind('<Escape>', lambda e: close_win())
+            close_btn.config(command=close_win)
+
+            # 窗口居中
+            win.update_idletasks()
+            win_w = new_size[0] + 40
+            win_h = new_size[1] + 80
+            x = (sw - win_w) // 2
+            y = (sh - win_h) // 2
+            win.geometry(f"{win_w}x{win_h}+{x}+{y}")
+            win.focus_set()
+            win.grab_set()
+
         except Exception as e:
             messagebox.showerror("错误", f"无法显示图片: {str(e)}")
+
+    # ==================== 关于对话框 ====================
+    def show_about(self):
+        """显示关于 / 操作说明"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("ℹ 关于")
+        dialog.geometry("680x600")
+        dialog.configure(bg=CLR_BG)
+        dialog.grab_set()
+        dialog.transient(self.root)
+
+        # 标题
+        hdr = tk.Frame(dialog, bg=CLR_HEADER_BG, height=54)
+        hdr.pack(fill=tk.X)
+        hdr.pack_propagate(False)
+        tk.Label(hdr, text="ℹ  北京维护中心乘务航材管理 — 操作说明",
+                  font=('Arial', 13, 'bold'), bg=CLR_HEADER_BG, fg=CLR_HEADER_FG).pack(pady=14)
+
+        # 内容区（带滚动）
+        canvas = tk.Canvas(dialog, bg=CLR_BG, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(dialog, orient=tk.VERTICAL, command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        content = tk.Frame(canvas, bg=CLR_BG, padx=24, pady=20)
+        canvas.create_window((0, 0), window=content, anchor='nw', width=660)
+
+        def _on_frame_config(e):
+            canvas.configure(scrollregion=canvas.bbox('all'))
+        content.bind('<Configure>', _on_frame_config)
+
+        def _on_mousewheel(e):
+            canvas.yview_scroll(int(-1*(e.delta/120)), 'units')
+        canvas.bind_all('<MouseWheel>', _on_mousewheel)
+        dialog.bind('<Destroy>', lambda e: canvas.unbind_all('<MouseWheel>'))
+
+        def sec(title, body):
+            """小节"""
+            tk.Label(content, text=title, font=('Arial', 11, 'bold'),
+                     bg=CLR_BG, fg=CLR_PRIMARY, anchor='w').pack(fill=tk.X, pady=(10, 2))
+            tk.Frame(content, bg=CLR_PRIMARY, height=1).pack(fill=tk.X, pady=(0, 6))
+            for line in body:
+                tk.Label(content, text=line, font=('Arial', 9), bg=CLR_BG,
+                         fg=CLR_TEXT, anchor='w', justify=tk.LEFT).pack(fill=tk.X, padx=8)
+
+        sec("📌 基本信息", [
+            "版本：v3.3   |   作者：wu_fan1@hnair.com   |   2026.06",
+            "运行：双击 AeroMat_v3.3.exe 即可，无需安装 Python",
+            "数据：程序同目录下自动创建 aeromat.db（数据库）和 photos/（照片）",
+        ])
+
+        sec("🚀 快速开始", [
+            "1. 首次运行：直接打开程序，数据库自动创建",
+            "2. 导入 Excel：点击「📊 统计分析」→「从 Excel 导入」",
+            "3. 备份数据：定期复制 aeromat.db 和 photos/ 文件夹",
+        ])
+
+        sec("📋 日常操作", [
+            "➕ 新增航材：填写件号、描述、架位号等信息保存",
+            "✏ 编辑航材：选中行 → 点击编辑 → 修改后保存",
+            "📥 入库：选中航材 → 填写数量和操作员 → 自动生成件序号",
+            "📤 出库：选中航材 → 选择个体件 → 填写领用人和用途",
+            "📷 照片：点击主表格「📷 N」列，直接打开该件照片图库",
+            "📋 出入库记录：主界面按钮区直接点击查看（支持筛选/导出）",
+        ])
+
+        sec("🔍 搜索与预警", [
+            "搜索：在搜索框输入关键词（件号/描述/架位号），回车或点搜索",
+            "低库存预警：库存 ≤ 最低库存时启动时自动弹窗提醒",
+            "有效期预警：主表格「有效期提醒」列显示颜色标记",
+            "  🟢 正常（>180天）  🟡 即将到期（90~180天）  🔴 到期（≤90天）",
+        ])
+
+        sec("📷 照片管理", [
+            "上传：点击主表格照片列「📷 N」，或点击「📷 上传照片」",
+            "查看：点击缩略图全屏查看，按 ESC 或点关闭按钮退出",
+            "存储：照片保存在程序同目录 photos/ 文件夹",
+        ])
+
+        sec("📌 常见问题", [
+            "Q：界面显示不全？→ 最大化窗口，或调整 Windows 显示缩放为100%",
+            "Q：Windows 拦截程序？→ 点击「更多信息」→「仍要运行」",
+            "Q：如何备份？→ 复制整个程序文件夹（含 aeromat.db 和 photos/）",
+        ])
+
+        sec("📝 版本更新记录", [
+            "v3.3  照片列可点击直达图库；修复缩略图比例；修复全屏关闭按钮",
+            "v3.2  主表格添加照片列；出入库记录按钮移至主界面；修复照片路径",
+            "v3.1  修复标题栏隐藏；修复macOS表头；新增出入库记录模块",
+            "v3.0  全面重构：应用改名；新增照片上传；件号+架位号组合管理",
+            "v2.0  升级SQLite数据库；件序号管理；低库存/有效期预警；打包exe",
+            "v1.0  初始版本：基础航材信息管理（Excel存储）",
+        ])
+
+        # 底部关闭按钮
+        btn_frame = tk.Frame(dialog, bg=CLR_BG, height=50)
+        btn_frame.pack(fill=tk.X, side=tk.BOTTOM)
+        btn_frame.pack_propagate(False)
+        ttk.Button(btn_frame, text="✕ 关闭", command=dialog.destroy, width=16).pack(pady=10)
 
     # ==================== 低库存预警 ====================
     def show_low_stock(self):
