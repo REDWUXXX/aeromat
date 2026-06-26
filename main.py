@@ -5,7 +5,7 @@
 AeroMat Inventory Management System
 用于乘务航材消耗件管理
 
-Version: 3.1
+Version: 3.2
 """
 
 import tkinter as tk
@@ -38,7 +38,7 @@ CLR_TEXT      = '#1E293B'   # 主文字
 CLR_SUBTEXT   = '#64748B'   # 次要文字
 
 # 照片存储目录（程序运行目录下的 photos 文件夹）
-PHOTOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'photos')
+PHOTOS_DIR = os.path.join(os.getcwd(), 'photos')  # 使用当前工作目录
 
 
 class AeroMatApp:
@@ -258,7 +258,7 @@ class AeroMatApp:
         tk.Label(header_frame, text="✈  北京维护中心乘务航材管理",
                  font=('Arial', 16, 'bold'),
                  bg=CLR_HEADER_BG, fg='white').pack(side=tk.LEFT, padx=18, pady=12)
-        tk.Label(header_frame, text="作者：吴凡  |  2026.06  ver3.1",
+        tk.Label(header_frame, text="作者：wu_fan1@hnair.com  |  2026.06  ver3.2",
                  font=('Arial', 9),
                  bg=CLR_HEADER_BG, fg='#93C5FD').pack(side=tk.RIGHT, padx=18, pady=12)
 
@@ -288,6 +288,7 @@ class AeroMatApp:
         plain_btn(row1, "📤 出库", self.show_out_dialog)
         plain_btn(row1, "📷 上传照片", self.show_photo_dialog)
         plain_btn(row1, "📊 统计分析", self.show_statistics)
+        plain_btn(row1, "📋 出入库记录", self.show_transaction_log)
 
         # === 搜索框卡片 ===
         search_card = tk.Frame(main_frame, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
@@ -317,12 +318,13 @@ class AeroMatApp:
                                highlightthickness=1, highlightcolor=CLR_BORDER)
         table_card.pack(fill=tk.BOTH, expand=True)
 
-        columns = ('件号', '描述', '总数量', '单位', '架位号', '最低库存', '有效期提醒', '备注')
+        columns = ('件号', '描述', '总数量', '单位', '架位号', '最低库存', '有效期提醒', '备注', '照片')
         self.tree = ttk.Treeview(table_card, columns=columns, show='headings', height=22)
 
         col_widths = {
             '件号': 130, '描述': 200, '总数量': 75, '单位': 55,
-            '架位号': 100, '最低库存': 75, '有效期提醒': 130, '备注': 150
+            '架位号': 100, '最低库存': 75, '有效期提醒': 130, '备注': 150,
+            '照片': 80
         }
         for col in columns:
             self.tree.heading(col, text=col)
@@ -403,11 +405,20 @@ class AeroMatApp:
                 except Exception:
                     expiry_alert = expiry
 
+            # 查询该件号是否有照片
+            if row[4] and row[4] != 'N/A':
+                self.cursor.execute('SELECT COUNT(*) FROM photos WHERE part_number=? AND location=?', (row[0], row[4]))
+            else:
+                self.cursor.execute('SELECT COUNT(*) FROM photos WHERE part_number=?', (row[0],))
+            photo_count = self.cursor.fetchone()[0]
+            photo_text = f"📷 {photo_count}" if photo_count > 0 else ""
+
             tag = 'oddrow' if idx % 2 == 0 else 'evenrow'
             self.tree.insert('', tk.END, tags=(tag,), values=(
                 row[0], row[1], row[2], row[3],
                 row[4] if row[4] else '-',
-                row[5], expiry_alert, row[7] if row[7] else ''
+                row[5], expiry_alert, row[7] if row[7] else '',
+                photo_text
             ))
 
         self.status_var.set(f"共 {len(rows)} 条记录")
@@ -797,11 +808,17 @@ class AeroMatApp:
                 ''', (qty, now, part_number, shelf, shelf))
 
                 # 记录交易
+                # 获取描述信息
+                self.cursor.execute('SELECT description FROM inventory WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL)) LIMIT 1',
+                                 (part_number, shelf, shelf))
+                desc_result = self.cursor.fetchone()
+                desc = desc_result[0] if desc_result else ''
+                
                 self.cursor.execute('''
                 INSERT INTO transactions
-                (part_number, location, trans_type, quantity, operator, purpose, trans_date, remark)
-                VALUES (?, ?, 'IN', ?, ?, ?, ?, ?)
-                ''', (part_number, shelf, qty, operator, remark, now, remark))
+                (part_number, location, description, trans_type, quantity, operator, purpose, trans_date, remark)
+                VALUES (?, ?, ?, 'IN', ?, ?, ?, ?, ?)
+                ''', (part_number, shelf, desc, qty, operator, remark, now, remark))
 
                 self.conn.commit()
                 messagebox.showinfo("成功",
@@ -913,11 +930,17 @@ class AeroMatApp:
                 WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL))
                 ''', (qty, now, part_number, location, location))
 
+                # 获取描述信息
+                self.cursor.execute('SELECT description FROM inventory WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL)) LIMIT 1',
+                                 (part_number, location, location))
+                desc_result = self.cursor.fetchone()
+                desc = desc_result[0] if desc_result else ''
+                
                 self.cursor.execute('''
                 INSERT INTO transactions
-                (part_number, location, trans_type, quantity, operator, purpose, trans_date, remark)
-                VALUES (?, ?, 'OUT', ?, ?, ?, ?, ?)
-                ''', (part_number, location, qty, operator, purpose, now, remark))
+                (part_number, location, description, trans_type, quantity, operator, purpose, trans_date, remark)
+                VALUES (?, ?, ?, 'OUT', ?, ?, ?, ?, ?)
+                ''', (part_number, location, desc, qty, operator, purpose, now, remark))
 
                 self.conn.commit()
                 messagebox.showinfo("成功", f"出库成功！减少 {qty} 件")
