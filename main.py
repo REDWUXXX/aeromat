@@ -614,15 +614,15 @@ class AeroMatApp:
 
         dialog = tk.Toplevel(self.root)
         dialog.title(f"✏ 编辑航材 - {part_number}")
-        dialog.geometry("540x640")
+        dialog.geometry("540x800")
         dialog.configure(bg='#F1F5F9')
         dialog.grab_set()
         dialog.transient(self.root)
 
         dialog.update_idletasks()
         x = (dialog.winfo_screenwidth() // 2) - (540 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (640 // 2)
-        dialog.geometry(f"540x640+{x}+{y}")
+        y = (dialog.winfo_screenheight() // 2) - (800 // 2)
+        dialog.geometry(f"540x800+{x}+{y}")
         dialog.columnconfigure(1, weight=1)
 
         fields = {}
@@ -1966,6 +1966,14 @@ class AeroMatApp:
                     VALUES (?, ?, ?, '正常', ?, ?)
                     ''', (part_number, location or None, serial_num, now, now))
 
+            self.conn.commit()
+
+            # 自动计算最低库存：未设置时设为总数量的20%
+            self.cursor.execute('SELECT id, total_quantity FROM inventory WHERE (min_stock IS NULL OR min_stock = 0) AND total_quantity > 0')
+            records = self.cursor.fetchall()
+            for rec_id, total_qty in records:
+                min_stock = max(1, int(total_qty * 0.2))
+                self.cursor.execute('UPDATE inventory SET min_stock = ? WHERE id = ?', (min_stock, rec_id))
             self.conn.commit()
 
             message = (f"导入完成！\n"
