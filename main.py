@@ -258,7 +258,7 @@ class AeroMatApp:
         tk.Label(header_frame, text="✈  北京维护中心乘务航材管理",
                  font=('Arial', 16, 'bold'),
                  bg=CLR_HEADER_BG, fg='white').pack(side=tk.LEFT, padx=18, pady=12)
-        tk.Label(header_frame, text="作者：wu_fan1@hnair.com  |  2026.06  ver3.2",
+        tk.Label(header_frame, text="作者：wu_fan1@hnair.com  |  2026.06  ver3.3",
                  font=('Arial', 9),
                  bg=CLR_HEADER_BG, fg='#93C5FD').pack(side=tk.RIGHT, padx=18, pady=12)
 
@@ -343,6 +343,7 @@ class AeroMatApp:
         # 隔行变色
         self.tree.tag_configure('oddrow', background=CLR_ROW_ODD)
         self.tree.tag_configure('evenrow', background=CLR_ROW_EVEN)
+        self.tree.tag_configure('low_stock', background='#FEE2E2')  # 淡红色背景
 
         # === 状态栏 ===
         self.status_var = tk.StringVar(value="就绪")
@@ -417,7 +418,11 @@ class AeroMatApp:
             photo_text = f"📷 {photo_count} 管理照片"
 
             tag = 'oddrow' if idx % 2 == 0 else 'evenrow'
-            self.tree.insert('', tk.END, tags=(tag,), values=(
+            # 低库存预警：红色背景标记
+            tags = (tag,)
+            if row[2] <= row[5]:  # total_quantity <= min_stock
+                tags = (tag, 'low_stock')
+            self.tree.insert('', tk.END, tags=tags, values=(
                 row[0], row[1], row[2], row[3],
                 row[4] if row[4] else '-',
                 row[5], expiry_alert, row[7] if row[7] else '',
@@ -497,6 +502,9 @@ class AeroMatApp:
                 unit = fields['单位'].get() or '个'
                 location = fields['架位号'].get().strip()
                 min_stock = float(fields['最低库存'].get() or 0)
+                # 如果未设置最低库存，自动计算为总数量的20%
+                if min_stock == 0:
+                    min_stock = max(1, int(quantity * 0.2))
                 remark = fields['备注'].get().strip()
                 item_count = int(fields['件数量'].get() or 0)
                 expiry_date = fields['有效期'].get().strip()
@@ -663,6 +671,9 @@ class AeroMatApp:
                 unit = fields['单位'].get() or '个'
                 new_location = fields['架位'].get().strip()
                 min_stock = float(fields['最低'].get() or 0)
+                # 如果未设置最低库存，自动计算为总数量的20%
+                if min_stock == 0:
+                    min_stock = max(1, int(total_qty * 0.2))
                 remark = fields['备注'].get().strip()
                 now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -1470,8 +1481,14 @@ class AeroMatApp:
 
         sec("🔍 搜索与预警", [
             "搜索：在搜索框输入关键词（件号/描述/架位号），回车或点搜索",
-            "低库存预警：库存 ≤ 最低库存时启动时自动弹窗提醒",
-            "有效期预警：主表格「有效期提醒」列显示颜色标记",
+            "",
+            "【低库存预警】",
+            "  • 默认规则：未手动设置时，最低库存 = 总数量 × 20%（最低为1）",
+            "  • 视觉标记：主表格中，低库存行显示红色背景",
+            "  • 手动设置：新增/编辑航材时，可手动填写最低库存数值",
+            "  • 关闭预警：将最低库存设为0即可",
+            "",
+            "【有效期预警】主表格「有效期提醒」列显示颜色标记",
             "  🟢 正常（>180天）  🟡 即将到期（90~180天）  🔴 到期（≤90天）",
         ])
 
