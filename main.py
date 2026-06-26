@@ -166,22 +166,6 @@ class AeroMatApp:
             except Exception:
                 pass  # 列已存在，忽略
 
-        # 创建个体件表（每个具体件的追踪）
-        self.cursor.execute('''
-        CREATE TABLE IF NOT EXISTS inventory_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            part_number TEXT NOT NULL,
-            location TEXT,
-            serial_number TEXT,
-            expiry_date TEXT,
-            last_check_date TEXT,
-            status TEXT DEFAULT '正常',
-            remark TEXT,
-            created_at TEXT,
-            updated_at TEXT
-        )
-        ''')
-
         # 创建出入库记录表
         self.cursor.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
@@ -236,7 +220,6 @@ class AeroMatApp:
         func_menu.add_command(label="出库管理", command=self.show_out_dialog)
         func_menu.add_command(label="盘点管理", command=self.show_check_dialog)
         func_menu.add_separator()
-        func_menu.add_command(label="查看个体件详情", command=self.show_items_detail)
 
         # 查询菜单
         query_menu = tk.Menu(menubar, tearoff=0)
@@ -258,7 +241,7 @@ class AeroMatApp:
         tk.Label(header_frame, text="✈  北京维护中心乘务航材管理",
                  font=('Arial', 16, 'bold'),
                  bg=CLR_HEADER_BG, fg='white').pack(side=tk.LEFT, padx=18, pady=12)
-        tk.Label(header_frame, text="作者：wu_fan1@hnair.com  |  2026.06  ver3.3",
+        tk.Label(header_frame, text="作者：wu_fan1@hnair.com  |  2026.06  ver3.4",
                  font=('Arial', 9),
                  bg=CLR_HEADER_BG, fg='#93C5FD').pack(side=tk.RIGHT, padx=18, pady=12)
 
@@ -310,8 +293,6 @@ class AeroMatApp:
             row=0, column=2, padx=(4, 4), pady=8)
         ttk.Button(search_card, text="刷新", command=self.load_inventory).grid(
             row=0, column=3, padx=(4, 8), pady=8)
-        ttk.Button(search_card, text="个体件详情", command=self.show_items_detail).grid(
-            row=0, column=4, padx=(4, 12), pady=8)
 
         # === 库存表格卡片 ===
         table_card = tk.Frame(main_frame, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
@@ -363,11 +344,7 @@ class AeroMatApp:
         if search_term:
             query = '''
             SELECT i.part_number, i.description, i.total_quantity, i.unit,
-                   i.location, i.min_stock,
-                   (SELECT MIN(ii.expiry_date) FROM inventory_items ii
-                    WHERE ii.part_number=i.part_number AND ii.location=i.location
-                    AND ii.status='正常') as earliest_expiry,
-                   i.remark
+                   i.location, i.min_stock, i.remark
             FROM inventory i
             WHERE (i.part_number LIKE ? OR i.description LIKE ? OR i.location LIKE ?)
             ORDER BY i.part_number, i.location
@@ -376,11 +353,7 @@ class AeroMatApp:
         else:
             query = '''
             SELECT i.part_number, i.description, i.total_quantity, i.unit,
-                   i.location, i.min_stock,
-                   (SELECT MIN(ii.expiry_date) FROM inventory_items ii
-                    WHERE ii.part_number=i.part_number AND ii.location=i.location
-                    AND ii.status='正常') as earliest_expiry,
-                   i.remark
+                   i.location, i.min_stock, i.remark
             FROM inventory i
             ORDER BY i.part_number, i.location
             '''
@@ -425,7 +398,7 @@ class AeroMatApp:
             self.tree.insert('', tk.END, tags=tags, values=(
                 row[0], row[1], row[2], row[3],
                 row[4] if row[4] else '-',
-                row[5], expiry_alert, row[7] if row[7] else '',
+                row[5], expiry_alert, row[6] if len(row) > 6 and row[6] else '',
                 photo_text
             ))
 
@@ -541,7 +514,6 @@ class AeroMatApp:
 
                 # 获取该件号+架位的现有最大序号
                 self.cursor.execute('''
-                SELECT MAX(serial_number) FROM inventory_items
                 WHERE part_number=? AND location=?
                 ''', (part_number, location))
                 max_result = self.cursor.fetchone()[0]
@@ -558,7 +530,6 @@ class AeroMatApp:
                 for i in range(1, new_items + 1):
                     serial_num = f"{part_number}-{last_num + i:03d}"
                     self.cursor.execute('''
-                    INSERT INTO inventory_items
                     (part_number, location, serial_number, expiry_date, status, created_at, updated_at)
                     VALUES (?, ?, ?, ?, '正常', ?, ?)
                     ''', (part_number, location, serial_num, expiry_date, now, now))
@@ -614,15 +585,15 @@ class AeroMatApp:
 
         dialog = tk.Toplevel(self.root)
         dialog.title(f"✏ 编辑航材 - {part_number}")
-        dialog.geometry("540x800")
+        dialog.geometry("540x640")
         dialog.configure(bg='#F1F5F9')
         dialog.grab_set()
         dialog.transient(self.root)
 
         dialog.update_idletasks()
         x = (dialog.winfo_screenwidth() // 2) - (540 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (800 // 2)
-        dialog.geometry(f"540x800+{x}+{y}")
+        y = (dialog.winfo_screenheight() // 2) - (640 // 2)
+        dialog.geometry(f"540x640+{x}+{y}")
         dialog.columnconfigure(1, weight=1)
 
         fields = {}
@@ -734,7 +705,6 @@ class AeroMatApp:
             f"确定要删除 {part_number}（架位: {location or '未指定'}）吗？\n"
             "这将同时删除该位置所有个体件记录！"):
             self.cursor.execute('''
-            DELETE FROM inventory_items WHERE part_number=? AND location=?
             ''', (part_number, location))
             self.cursor.execute('''
             DELETE FROM inventory WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL))
@@ -760,13 +730,35 @@ class AeroMatApp:
         dialog.title(f"📥 入库 - {part_number}")
         dialog.geometry("400x520")
 
-        ttk.Label(dialog, text=f"件号: {part_number}",
-                 font=('Arial', 10, 'bold')).grid(row=0, column=0, columnspan=2, padx=10, pady=8)
-        ttk.Label(dialog, text=f"当前库存: {values[2]} {values[3]}").grid(
-            row=1, column=0, columnspan=2, padx=10, pady=3)
+    # ==================== 入库 ====================
+    def show_in_dialog(self):
+        """显示入库对话框（简化版：只按数量管理）"""
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning("警告", "请先在列表中选择一行")
+            return
 
+        item = self.tree.item(selection[0])
+        values = item['values']
+        part_number = values[0]
+        location = values[4] if values[4] != '-' else None
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"📥 入库 - {part_number}")
+        dialog.geometry("480x520")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # 信息区
+        info_frame = ttk.Frame(dialog, padding=12)
+        info_frame.grid(row=0, column=0, columnspan=2, sticky="ew")
+        ttk.Label(info_frame, text=f"件号: {part_number}", font=('Arial', 11, 'bold')).pack(anchor=tk.W)
+        ttk.Label(info_frame, text=f"描述: {values[1]}").pack(anchor=tk.W, pady=2)
+        ttk.Label(info_frame, text=f"架位: {values[4]}").pack(anchor=tk.W, pady=2)
+        ttk.Label(info_frame, text=f"当前库存: {values[2]} {values[3]}", foreground="blue").pack(anchor=tk.W, pady=4)
+
+        row = 1
         fields = {}
-        row = 2
         fields['数量'] = self._add_field(dialog, fields, "入库数量 *", row)
         row += 1
         fields['有效期'] = self._add_field(dialog, fields, "有效期(YYYY-MM-DD)", row)
@@ -782,7 +774,7 @@ class AeroMatApp:
 
         def save():
             try:
-                qty = int(fields['数量'].get())
+                qty = float(fields['数量'].get())
                 expiry = fields['有效期'].get().strip()
                 shelf = fields['架位'].get().strip() or location
                 operator = fields['经手人'].get().strip()
@@ -793,41 +785,19 @@ class AeroMatApp:
                     messagebox.showerror("错误", "入库数量必须大于0")
                     return
 
-                # 获取该件号+架位下最大序号
-                self.cursor.execute('''
-                SELECT MAX(serial_number) FROM inventory_items
-                WHERE part_number=? AND (location=? OR location IS NULL)
-                ''', (part_number, shelf))
-                max_result = self.cursor.fetchone()[0]
-                last_num = 0
-                if max_result:
-                    try:
-                        last_num = int(max_result.rsplit('-', 1)[-1])
-                    except Exception:
-                        last_num = 0
-
-                # 插入个体件
-                for i in range(1, qty + 1):
-                    serial_num = f"{part_number}-{last_num + i:03d}"
-                    self.cursor.execute('''
-                    INSERT INTO inventory_items
-                    (part_number, location, serial_number, expiry_date, status, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, '正常', ?, ?)
-                    ''', (part_number, shelf, serial_num, expiry, now, now))
-
-                # 更新总数量
+                # 只更新总数量（不生成个体件）
                 self.cursor.execute('''
                 UPDATE inventory SET total_quantity=total_quantity+?, updated_at=?
                 WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL))
                 ''', (qty, now, part_number, shelf, shelf))
 
-                # 记录交易
                 # 获取描述信息
                 self.cursor.execute('SELECT description FROM inventory WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL)) LIMIT 1',
                                  (part_number, shelf, shelf))
                 desc_result = self.cursor.fetchone()
                 desc = desc_result[0] if desc_result else ''
-                
+
+                # 记录交易
                 self.cursor.execute('''
                 INSERT INTO transactions
                 (part_number, location, description, trans_type, quantity, operator, purpose, trans_date, remark)
@@ -835,23 +805,23 @@ class AeroMatApp:
                 ''', (part_number, shelf, desc, qty, operator, remark, now, remark))
 
                 self.conn.commit()
-                messagebox.showinfo("成功",
-                    f"入库成功！\n新增 {qty} 个体件\n"
-                    f"件序号: {part_number}-{last_num+1:03d} ~ {part_number}-{last_num+qty:03d}")
+                messagebox.showinfo("成功", f"入库成功！\n架位 {shelf} 增加 {qty} {values[3]}")
                 dialog.destroy()
                 self.load_inventory()
+            except ValueError:
+                messagebox.showerror("错误", "请输入有效的数量")
             except Exception as e:
                 messagebox.showerror("错误", str(e))
 
+        # 按钮区
         btn_row = tk.Frame(dialog, bg="#F8FAFC", height=52)
-        btn_row.grid(row=row, column=0, columnspan=2, sticky="ew")
+        btn_row.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(12, 0))
         btn_row.pack_propagate(False)
         ttk.Button(btn_row, text="💾 确定入库", command=save).pack(side=tk.LEFT, padx=12, pady=10)
         ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(side=tk.LEFT, padx=8, pady=10)
-
     # ==================== 出库 ====================
     def show_out_dialog(self):
-        """显示出库对话框"""
+        """显示出库对话框（简化版：只按数量管理）"""
         selection = self.tree.selection()
         if not selection:
             messagebox.showwarning("警告", "请先在列表中选择一行")
@@ -861,84 +831,63 @@ class AeroMatApp:
         values = item['values']
         part_number = values[0]
         location = values[4] if values[4] != '-' else None
-
-        self.cursor.execute('''
-        SELECT serial_number, location, expiry_date FROM inventory_items
-        WHERE part_number=? AND status='正常'
-        ORDER BY expiry_date ASC, serial_number ASC
-        ''', (part_number,))
-        available_items = self.cursor.fetchall()
-
-        if not available_items:
-            messagebox.showerror("错误", "当前没有可用个体件")
-            return
+        current_qty = float(values[2])  # 当前架位的库存数量
 
         dialog = tk.Toplevel(self.root)
         dialog.title(f"📤 出库 - {part_number}")
-        dialog.geometry("520x620")
+        dialog.geometry("480x480")
+        dialog.transient(self.root)
+        dialog.grab_set()
 
-        ttk.Label(dialog, text=f"件号: {part_number} | 描述: {values[1]}",
-                 font=('Arial', 10, 'bold')).grid(row=0, column=0, columnspan=2, padx=10, pady=8)
-        ttk.Label(dialog, text=f"当前库存: {values[2]} {values[3]}").grid(
-            row=1, column=0, columnspan=2, padx=10, pady=3)
+        # 信息区
+        info_frame = ttk.Frame(dialog, padding=12)
+        info_frame.grid(row=0, column=0, columnspan=2, sticky="ew")
+        ttk.Label(info_frame, text=f"件号: {part_number}", font=('Arial', 11, 'bold')).pack(anchor=tk.W)
+        ttk.Label(info_frame, text=f"描述: {values[1]}").pack(anchor=tk.W, pady=2)
+        ttk.Label(info_frame, text=f"架位: {values[4]}").pack(anchor=tk.W, pady=2)
+        ttk.Label(info_frame, text=f"当前库存: {current_qty} {values[3]}", foreground="blue").pack(anchor=tk.W, pady=4)
 
-        row = 2
-        ttk.Label(dialog, text="可用个体件:", font=('Arial', 9, 'bold')).grid(
-            row=row, column=0, columnspan=2, padx=10, pady=4, sticky=tk.W)
-        row += 1
-
-        list_frame = ttk.Frame(dialog)
-        list_frame.grid(row=row, column=0, columnspan=2, padx=10, pady=5)
-        listbox = tk.Listbox(list_frame, height=8, width=62)
-        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=listbox.yview)
-        listbox.configure(yscrollcommand=scrollbar.set)
-        for it in available_items:
-            serial, loc, expiry = it
-            expiry_str = f"有效期: {expiry}" if expiry else "无有效期"
-            loc_str = loc or '-'
-            listbox.insert(tk.END, f"{serial} | 架位: {loc_str} | {expiry_str}")
-        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        row += 1
-
+        row = 1
+        # 出库数量
+        ttk.Label(dialog, text="出库数量:").grid(row=row, column=0, padx=12, pady=6, sticky=tk.W)
         qty_var = tk.StringVar(value='1')
-        ttk.Label(dialog, text="出库数量").grid(row=row, column=0, padx=10, pady=5, sticky=tk.W)
-        ttk.Entry(dialog, textvariable=qty_var, width=25).grid(row=row, column=1, padx=10, pady=5)
+        qty_entry = ttk.Entry(dialog, textvariable=qty_var, width=20)
+        qty_entry.grid(row=row, column=1, padx=12, pady=6, sticky=tk.W)
         row += 1
 
+        # 领用人
+        ttk.Label(dialog, text="领用人:").grid(row=row, column=0, padx=12, pady=6, sticky=tk.W)
         operator_var = tk.StringVar()
-        ttk.Label(dialog, text="领用人").grid(row=row, column=0, padx=10, pady=5, sticky=tk.W)
-        ttk.Entry(dialog, textvariable=operator_var, width=25).grid(row=row, column=1, padx=10, pady=5)
+        ttk.Entry(dialog, textvariable=operator_var, width=20).grid(row=row, column=1, padx=12, pady=6, sticky=tk.W)
         row += 1
 
+        # 用途
+        ttk.Label(dialog, text="用途:").grid(row=row, column=0, padx=12, pady=6, sticky=tk.W)
         purpose_var = tk.StringVar()
-        ttk.Label(dialog, text="用途").grid(row=row, column=0, padx=10, pady=5, sticky=tk.W)
-        ttk.Entry(dialog, textvariable=purpose_var, width=25).grid(row=row, column=1, padx=10, pady=5)
+        ttk.Entry(dialog, textvariable=purpose_var, width=20).grid(row=row, column=1, padx=12, pady=6, sticky=tk.W)
         row += 1
 
+        # 备注
+        ttk.Label(dialog, text="备注:").grid(row=row, column=0, padx=12, pady=6, sticky=tk.W)
         remark_var = tk.StringVar()
-        ttk.Label(dialog, text="备注").grid(row=row, column=0, padx=10, pady=5, sticky=tk.W)
-        ttk.Entry(dialog, textvariable=remark_var, width=25).grid(row=row, column=1, padx=10, pady=5)
+        ttk.Entry(dialog, textvariable=remark_var, width=20).grid(row=row, column=1, padx=12, pady=6, sticky=tk.W)
         row += 1
 
         def save():
             try:
-                qty = int(qty_var.get())
-                if qty > len(available_items):
-                    messagebox.showerror("错误", f"库存不足！当前可用: {len(available_items)} 件")
+                qty = float(qty_var.get())
+                if qty <= 0:
+                    messagebox.showerror("错误", "出库数量必须大于0")
+                    return
+                if qty > current_qty:
+                    messagebox.showerror("错误", f"库存不足！\n当前架位库存: {current_qty} {values[3]}")
                     return
                 operator = operator_var.get().strip()
                 purpose = purpose_var.get().strip()
                 remark = remark_var.get().strip()
                 now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-                for i in range(qty):
-                    serial = available_items[i][0]
-                    self.cursor.execute('''
-                    UPDATE inventory_items SET status='已领用', updated_at=?
-                    WHERE part_number=? AND serial_number=?
-                    ''', (now, part_number, serial))
-
+                # 只减少当前架位的库存
                 self.cursor.execute('''
                 UPDATE inventory SET total_quantity=total_quantity-?, updated_at=?
                 WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL))
@@ -949,7 +898,8 @@ class AeroMatApp:
                                  (part_number, location, location))
                 desc_result = self.cursor.fetchone()
                 desc = desc_result[0] if desc_result else ''
-                
+
+                # 记录交易
                 self.cursor.execute('''
                 INSERT INTO transactions
                 (part_number, location, description, trans_type, quantity, operator, purpose, trans_date, remark)
@@ -957,19 +907,20 @@ class AeroMatApp:
                 ''', (part_number, location, desc, qty, operator, purpose, now, remark))
 
                 self.conn.commit()
-                messagebox.showinfo("成功", f"出库成功！减少 {qty} 件")
+                messagebox.showinfo("成功", f"出库成功！\n架位 {values[4]} 减少 {qty} {values[3]}")
                 dialog.destroy()
                 self.load_inventory()
+            except ValueError:
+                messagebox.showerror("错误", "请输入有效的数量")
             except Exception as e:
                 messagebox.showerror("错误", str(e))
 
+        # 按钮区
         btn_row = tk.Frame(dialog, bg="#F8FAFC", height=52)
-        btn_row.grid(row=row, column=0, columnspan=2, sticky="ew")
+        btn_row.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(12, 0))
         btn_row.pack_propagate(False)
         ttk.Button(btn_row, text="💾 确定出库", command=save).pack(side=tk.LEFT, padx=12, pady=10)
         ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(side=tk.LEFT, padx=8, pady=10)
-
-    # ==================== 主表格点击处理 ====================
     def _on_tree_click(self, event):
         """单击主表格：点到照片列就打开照片图库"""
         region = self.tree.identify("region", event.x, event.y)
@@ -987,82 +938,6 @@ class AeroMatApp:
             self.show_photo_dialog(part_number, location)
 
     # ==================== 个体件详情 ====================
-    def show_items_detail(self):
-        """显示个体件详情"""
-        selection = self.tree.selection()
-        if not selection:
-            messagebox.showwarning("警告", "请先在列表中选择一行")
-            return
-
-        item = self.tree.item(selection[0])
-        values = item['values']
-        part_number = values[0]
-        location = values[4] if values[4] != '-' else None
-
-        self.cursor.execute('''
-        SELECT serial_number, location, expiry_date, last_check_date, status, remark, created_at
-        FROM inventory_items
-        WHERE part_number=?
-        ORDER BY status, expiry_date ASC, serial_number ASC
-        ''', (part_number,))
-        items = self.cursor.fetchall()
-
-        # 统计照片数量
-        self.cursor.execute(
-            'SELECT COUNT(*) FROM photos WHERE part_number=?', (part_number,))
-        photo_count = self.cursor.fetchone()[0]
-
-        dialog = tk.Toplevel(self.root)
-        dialog.title(f"个体件详情 - {part_number}")
-        dialog.geometry("950x620")
-
-        ttk.Label(dialog, text=f"件号: {part_number} | 架位: {location or '未指定'} | "
-                 f"当前库存: {values[2]} {values[3]}",
-                 font=('Arial', 10, 'bold')).pack(pady=6)
-
-        if not items:
-            ttk.Label(dialog, text="暂无个体件记录（该记录由Excel导入，数量仅记录在主表）").pack(pady=20)
-            ttk.Button(dialog, text="关闭", command=dialog.destroy).pack(pady=10)
-            return
-
-        columns = ('件序号', '架位号', '有效期', '上次检查', '状态', '备注', '创建时间')
-        tree = ttk.Treeview(dialog, columns=columns, show='headings', height=18)
-        for col in columns:
-            tree.heading(col, text=col)
-            tree.column(col, width=130)
-        tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
-
-        today = datetime.now()
-        for it in items:
-            serial, shelf, expiry, check_date, status, remark, created = it
-            expiry_status = expiry or '-'
-            if expiry and status == '正常':
-                try:
-                    days_left = (datetime.strptime(expiry, '%Y-%m-%d') - today).days
-                    if days_left < 0:
-                        expiry_status = f"⚠️ 已过期({expiry})"
-                    elif days_left <= 30:
-                        expiry_status = f"🔴 {expiry}({days_left}天)"
-                    elif days_left <= 60:
-                        expiry_status = f"🟡 {expiry}({days_left}天)"
-                except Exception:
-                    pass
-            tree.insert('', tk.END, values=(
-                serial, shelf or '-', expiry_status, check_date or '-',
-                status, remark or '-', created or '-'
-            ))
-
-        btn_frame = ttk.Frame(dialog)
-        btn_frame.pack(pady=8)
-        ttk.Button(btn_frame, text="编辑个体件", command=lambda: self._edit_single_item(tree, part_number, location)).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="查看/上传照片",
-                  command=lambda: self.show_photo_dialog(part_number=part_number, location=location)).pack(side=tk.LEFT, padx=5)
-        if photo_count > 0:
-            ttk.Label(btn_frame, text=f"📷 {photo_count} 张照片",
-                     foreground='blue').pack(side=tk.LEFT, padx=10)
-        ttk.Button(btn_frame, text="关闭", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
-        ttk.Label(dialog, text=f"共 {len(items)} 个体件").pack(pady=4)
-
     def _edit_single_item(self, tree, part_number, location):
         """编辑选中的个体件"""
         sel = tree.selection()
@@ -1072,7 +947,6 @@ class AeroMatApp:
         item_data = tree.item(sel[0])
         serial = item_data['values'][0]
         self.cursor.execute(
-            'SELECT * FROM inventory_items WHERE part_number=? AND serial_number=?',
             (part_number, serial))
         record = self.cursor.fetchone()
         if not record:
@@ -1122,7 +996,6 @@ class AeroMatApp:
                 remark = fields['备注'].get().strip()
                 now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 self.cursor.execute('''
-                UPDATE inventory_items SET location=?, expiry_date=?, last_check_date=?,
                                            status=?, remark=?, updated_at=?
                 WHERE part_number=? AND serial_number=?
                 ''', (shelf, expiry, check_date, status, remark, now, part_number, serial))
@@ -1459,8 +1332,8 @@ class AeroMatApp:
                          fg=CLR_TEXT, anchor='w', justify=tk.LEFT).pack(fill=tk.X, padx=8)
 
         sec("📌 基本信息", [
-            f"版本：v3.3   |   作者：wu_fan1@hnair.com   |   2026.06",
-            "运行：双击「北京维护中心乘务航材管理_v3.3.exe」即可，无需安装 Python",
+            f"版本：v3.4   |   作者：wu_fan1@hnair.com   |   2026.06",
+            "运行：双击「北京维护中心乘务航材管理_v3.4.exe」即可，无需安装 Python",
             "数据：程序同目录下自动创建 aeromat.db（数据库）和 photos/（照片）",
         ])
 
@@ -1503,13 +1376,14 @@ class AeroMatApp:
             "Q：Windows 拦截程序？→ 点击「更多信息」→「仍要运行」",
             "Q：如何备份？→ 复制整个程序文件夹（含 aeromat.db 和 photos/）",
         ])
-
         sec("📝 版本更新记录", [
+            "v3.4  彻底删除个体件跟踪，只按数量管理库存；简化出库/入库/导入逻辑；删除个体件详情功能",
             "v3.3  照片列支持点击直达图库；优化缩略图显示比例；修复全屏查看器关闭功能",
             "v3.2  主表格新增照片数量列；出入库记录入口调整至主界面；完善照片路径管理",
             "v3.1  优化界面布局，修复标题栏显示问题；新增出入库记录查询模块",
             "v3.0  系统重构：应用名称更新；新增照片管理功能；优化件号生成逻辑",
             "v2.0  数据库升级至 SQLite；新增件序号管理；新增库存预警功能；发布 Windows 打包版本",
+            "v1.0  初始版本发布：实现航材基础信息管理功能",
             "v1.0  初始版本发布：实现航材基础信息管理功能",
         ])
 
@@ -1564,7 +1438,6 @@ class AeroMatApp:
 
         self.cursor.execute('''
         SELECT ii.part_number, ii.serial_number, ii.location, ii.expiry_date, ii.status
-        FROM inventory_items ii
         WHERE ii.expiry_date IS NOT NULL AND ii.expiry_date != ''
           AND ii.expiry_date <= ? AND ii.status = '正常'
         ORDER BY ii.expiry_date ASC
@@ -1615,7 +1488,6 @@ class AeroMatApp:
         low_stock_count = self.cursor.fetchone()[0]
 
         self.cursor.execute('''
-        SELECT COUNT(*) FROM inventory_items
         WHERE expiry_date IS NOT NULL AND expiry_date != ''
           AND expiry_date <= date('now', '+90 days') AND status = '正常'
         ''')
@@ -1945,35 +1817,6 @@ class AeroMatApp:
                      remark, now, now))
                 imported += 1
 
-                # 为该件号+架位生成个体件记录
-                self.cursor.execute('''
-                SELECT MAX(serial_number) FROM inventory_items
-                WHERE part_number=? AND (location=? OR location IS NULL)
-                ''', (part_number, location))
-                max_result = self.cursor.fetchone()[0]
-                last_num = 0
-                if max_result:
-                    try:
-                        last_num = int(max_result.rsplit('-', 1)[-1])
-                    except Exception:
-                        last_num = 0
-
-                for i in range(1, int(qty) + 1):
-                    serial_num = f"{part_number}-{last_num + i:03d}"
-                    self.cursor.execute('''
-                    INSERT INTO inventory_items
-                    (part_number, location, serial_number, status, created_at, updated_at)
-                    VALUES (?, ?, ?, '正常', ?, ?)
-                    ''', (part_number, location or None, serial_num, now, now))
-
-            self.conn.commit()
-
-            # 自动计算最低库存：未设置时设为总数量的20%
-            self.cursor.execute('SELECT id, total_quantity FROM inventory WHERE (min_stock IS NULL OR min_stock = 0) AND total_quantity > 0')
-            records = self.cursor.fetchall()
-            for rec_id, total_qty in records:
-                min_stock = max(1, int(total_qty * 0.2))
-                self.cursor.execute('UPDATE inventory SET min_stock = ? WHERE id = ?', (min_stock, rec_id))
             self.conn.commit()
 
             message = (f"导入完成！\n"
