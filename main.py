@@ -415,7 +415,7 @@ class AeroMatApp:
             else:
                 self.cursor.execute('SELECT COUNT(*) FROM photos WHERE part_number=?', (row[0],))
             photo_count = self.cursor.fetchone()[0]
-            photo_text = f"📷 {photo_count}" if photo_count > 0 else ""
+            photo_text = f"📷 {photo_count} 点击管理照片"
 
             tag = 'oddrow' if idx % 2 == 0 else 'evenrow'
             self.tree.insert('', tk.END, tags=(tag,), values=(
@@ -1449,8 +1449,8 @@ class AeroMatApp:
                          fg=CLR_TEXT, anchor='w', justify=tk.LEFT).pack(fill=tk.X, padx=8)
 
         sec("📌 基本信息", [
-            "版本：v3.3   |   作者：wu_fan1@hnair.com   |   2026.06",
-            "运行：双击 AeroMat_v3.3.exe 即可，无需安装 Python",
+            f"版本：v3.3   |   作者：wu_fan1@hnair.com   |   2026.06",
+            "运行：双击「北京维护中心乘务航材管理_v3.3.exe」即可，无需安装 Python",
             "数据：程序同目录下自动创建 aeromat.db（数据库）和 photos/（照片）",
         ])
 
