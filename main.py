@@ -287,7 +287,6 @@ class AeroMatApp:
         plain_btn(row1, "📥 入库", self.show_in_dialog)
         plain_btn(row1, "📤 出库", self.show_out_dialog)
         plain_btn(row1, "📷 上传照片", self.show_photo_dialog)
-        plain_btn(row1, "📊 统计分析", self.show_statistics)
         plain_btn(row1, "📋 出入库记录", self.show_transaction_log)
         plain_btn(row1, "ℹ 关于", self.show_about)
 
@@ -415,7 +414,7 @@ class AeroMatApp:
             else:
                 self.cursor.execute('SELECT COUNT(*) FROM photos WHERE part_number=?', (row[0],))
             photo_count = self.cursor.fetchone()[0]
-            photo_text = f"📷 {photo_count} 点击管理照片"
+            photo_text = f"📷 {photo_count} 管理照片"
 
             tag = 'oddrow' if idx % 2 == 0 else 'evenrow'
             self.tree.insert('', tk.END, tags=(tag,), values=(
@@ -1456,7 +1455,7 @@ class AeroMatApp:
 
         sec("🚀 快速开始", [
             "1. 首次运行：直接打开程序，数据库自动创建",
-            "2. 导入 Excel：点击「📊 统计分析」→「从 Excel 导入」",
+            "2. 导入 Excel：点击左上角「文件」菜单 → 「导入 Excel」",
             "3. 备份数据：定期复制 aeromat.db 和 photos/ 文件夹",
         ])
 
@@ -1489,12 +1488,12 @@ class AeroMatApp:
         ])
 
         sec("📝 版本更新记录", [
-            "v3.3  照片列可点击直达图库；修复缩略图比例；修复全屏关闭按钮",
-            "v3.2  主表格添加照片列；出入库记录按钮移至主界面；修复照片路径",
-            "v3.1  修复标题栏隐藏；修复macOS表头；新增出入库记录模块",
-            "v3.0  全面重构：应用改名；新增照片上传；件号+架位号组合管理",
-            "v2.0  升级SQLite数据库；件序号管理；低库存/有效期预警；打包exe",
-            "v1.0  初始版本：基础航材信息管理（Excel存储）",
+            "v3.3  照片列支持点击直达图库；优化缩略图显示比例；修复全屏查看器关闭功能",
+            "v3.2  主表格新增照片数量列；出入库记录入口调整至主界面；完善照片路径管理",
+            "v3.1  优化界面布局，修复标题栏显示问题；新增出入库记录查询模块",
+            "v3.0  系统重构：应用名称更新；新增照片管理功能；优化件号生成逻辑",
+            "v2.0  数据库升级至 SQLite；新增件序号管理；新增库存预警功能；发布 Windows 打包版本",
+            "v1.0  初始版本发布：实现航材基础信息管理功能",
         ])
 
         # 底部关闭按钮
