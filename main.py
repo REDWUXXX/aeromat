@@ -585,15 +585,15 @@ class AeroMatApp:
 
         dialog = tk.Toplevel(self.root)
         dialog.title(f"✏ 编辑航材 - {part_number}")
-        dialog.geometry("540x640")
+        dialog.geometry("560x800")
         dialog.configure(bg='#F1F5F9')
         dialog.grab_set()
         dialog.transient(self.root)
 
         dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - (540 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (640 // 2)
-        dialog.geometry(f"540x640+{x}+{y}")
+        x = (dialog.winfo_screenwidth() // 2) - (560 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (800 // 2)
+        dialog.geometry(f"560x800+{x}+{y}")
         dialog.columnconfigure(1, weight=1)
 
         fields = {}
@@ -626,13 +626,6 @@ class AeroMatApp:
 
         fields['备注'] = self._add_field(dialog, fields, "备注", row)
         fields['备注'].set(record[7] or '')
-        row += 1
-
-        btn_row = tk.Frame(dialog, bg="#F8FAFC", height=52)
-        btn_row.grid(row=row, column=0, columnspan=2, sticky="ew")
-        btn_row.pack_propagate(False)
-        ttk.Button(btn_row, text="💾 保存", command=save).pack(side=tk.LEFT, padx=12, pady=10)
-        ttk.Button(btn_row, text="✕ 取消", command=dialog.destroy).pack(side=tk.LEFT, padx=8, pady=10)
         row += 1
 
         def save():
@@ -687,6 +680,12 @@ class AeroMatApp:
                 self.load_inventory()
             except Exception as e:
                 messagebox.showerror("错误", str(e))
+
+        # 按钮行（在 save 函数定义后创建）
+        btn_frame = tk.Frame(dialog, bg="#F8FAFC", height=60)
+        btn_frame.grid(row=row, column=0, columnspan=2, sticky="ew", pady=(20, 0))
+        ttk.Button(btn_frame, text="💾 保存", command=save).pack(side=tk.LEFT, padx=20, pady=15)
+        ttk.Button(btn_frame, text="✕ 取消", command=dialog.destroy).pack(side=tk.LEFT, padx=10, pady=15)
 
     # ==================== 删除航材 ====================
     def delete_item(self):
