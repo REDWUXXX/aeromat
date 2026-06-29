@@ -37,6 +37,10 @@ CLR_BORDER    = '#E2E8F0'   # 边框线
 CLR_TEXT      = '#1E293B'   # 主文字
 CLR_SUBTEXT   = '#64748B'   # 次要文字
 
+# 数据库文件路径（程序运行目录下的 aeromat.db）
+# 如需修改数据库名或路径，直接修改下面这行即可
+DB_PATH = os.path.join(os.getcwd(), 'Database.db')
+
 # 照片存储目录（程序运行目录下的 photos 文件夹）
 PHOTOS_DIR = os.path.join(os.getcwd(), 'photos')  # 使用当前工作目录
 
@@ -135,7 +139,7 @@ class AeroMatApp:
 
     def init_db(self):
         """初始化数据库"""
-        self.conn = sqlite3.connect('aeromat.db')
+        self.conn = sqlite3.connect(DB_PATH)
         self.cursor = self.conn.cursor()
 
         # 创建库存主表（件号+架位共同唯一）
@@ -241,7 +245,7 @@ class AeroMatApp:
         tk.Label(header_frame, text="✈  北京维护中心乘务航材管理",
                  font=('Arial', 16, 'bold'),
                  bg=CLR_HEADER_BG, fg='white').pack(side=tk.LEFT, padx=18, pady=12)
-        tk.Label(header_frame, text="作者：wu_fan1@hnair.com  |  2026.06  ver3.4",
+        tk.Label(header_frame, text="ver3.4",
                  font=('Arial', 9),
                  bg=CLR_HEADER_BG, fg='#93C5FD').pack(side=tk.RIGHT, padx=18, pady=12)
 
@@ -294,6 +298,30 @@ class AeroMatApp:
         ttk.Button(search_card, text="刷新", command=self.load_inventory).grid(
             row=0, column=3, padx=(4, 8), pady=8)
 
+        # === 排序控件 ===
+        sort_card = tk.Frame(main_frame, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
+                              highlightthickness=1, highlightcolor=CLR_BORDER)
+        sort_card.pack(fill=tk.X, pady=(0, 10))
+
+        tk.Label(sort_card, text="排序方式", font=('Arial', 9), bg=CLR_CARD,
+                 fg=CLR_SUBTEXT).pack(side=tk.LEFT, padx=(12, 6), pady=8)
+
+        self.sort_field = tk.StringVar(value='件号')
+        sort_options = ['件号', '描述', '总数量', '架位号', '最低库存']
+        sort_menu = ttk.Combobox(sort_card, textvariable=self.sort_field,
+                                  values=sort_options, state='readonly', width=10, font=('Arial', 9))
+        sort_menu.pack(side=tk.LEFT, padx=(0, 6), pady=8)
+        sort_menu.bind('<<ComboboxSelected>>', lambda e: self.load_inventory())
+
+        self.sort_order = tk.StringVar(value='升序')
+        order_menu = ttk.Combobox(sort_card, textvariable=self.sort_order,
+                                   values=['升序', '降序'], state='readonly', width=6, font=('Arial', 9))
+        order_menu.pack(side=tk.LEFT, padx=(0, 6), pady=8)
+        order_menu.bind('<<ComboboxSelected>>', lambda e: self.load_inventory())
+
+        ttk.Button(sort_card, text="排序", command=self.load_inventory).pack(
+            side=tk.LEFT, padx=(0, 12), pady=8)
+
         # === 库存表格卡片 ===
         table_card = tk.Frame(main_frame, bg=CLR_CARD, bd=1, relief=tk.GROOVE,
                                highlightthickness=1, highlightcolor=CLR_BORDER)
@@ -335,27 +363,45 @@ class AeroMatApp:
         status_bar.pack(fill=tk.X, pady=(6, 0))
 
     # ==================== 数据加载 ==================
+    def _get_sort_clause(self):
+        """根据排序设置生成 ORDER BY 子句"""
+        # 排序字段映射：显示名 → SQL列名
+        field_map = {
+            '件号': 'i.part_number',
+            '描述': 'i.description',
+            '总数量': 'CAST(i.total_quantity AS REAL)',
+            '架位号': 'i.location',
+            '最低库存': 'CAST(i.min_stock AS REAL)',
+        }
+        sql_field = field_map.get(self.sort_field.get(), 'i.part_number')
+        direction = 'DESC' if self.sort_order.get() == '降序' else 'ASC'
+        # 数字字段降序时用 NULLS LAST 处理空值
+        if self.sort_field.get() in ('总数量', '最低库存'):
+            return f'ORDER BY {sql_field} {direction} NULLS LAST'
+        return f'ORDER BY {sql_field} {direction}'
+
     def load_inventory(self):
         """加载库存数据"""
         for item in self.tree.get_children():
             self.tree.delete(item)
 
+        order_clause = self._get_sort_clause()
         search_term = self.search_var.get().strip()
         if search_term:
-            query = '''
+            query = f'''
             SELECT i.part_number, i.description, i.total_quantity, i.unit,
                    i.location, i.min_stock, i.remark
             FROM inventory i
             WHERE (i.part_number LIKE ? OR i.description LIKE ? OR i.location LIKE ?)
-            ORDER BY i.part_number, i.location
+            {order_clause}
             '''
             self.cursor.execute(query, (f'%{search_term}%', f'%{search_term}%', f'%{search_term}%'))
         else:
-            query = '''
+            query = f'''
             SELECT i.part_number, i.description, i.total_quantity, i.unit,
                    i.location, i.min_stock, i.remark
             FROM inventory i
-            ORDER BY i.part_number, i.location
+            {order_clause}
             '''
             self.cursor.execute(query)
 
@@ -1331,15 +1377,15 @@ class AeroMatApp:
                          fg=CLR_TEXT, anchor='w', justify=tk.LEFT).pack(fill=tk.X, padx=8)
 
         sec("📌 基本信息", [
-            f"版本：v3.4   |   作者：wu_fan1@hnair.com   |   2026.06",
+            "版本：v3.4   |   2026.06   |   作者：wu_fan1@hnair.com",
             "运行：双击「北京维护中心乘务航材管理_v3.4.exe」即可，无需安装 Python",
-            "数据：程序同目录下自动创建 aeromat.db（数据库）和 photos/（照片）",
+            f"数据库：程序同目录下 {os.path.basename(DB_PATH)}（SQLite，启动时自动创建）",
+            "照片目录：程序同目录下 photos/ 文件夹",
         ])
 
         sec("🚀 快速开始", [
             "1. 首次运行：直接打开程序，数据库自动创建",
             "2. 导入 Excel：点击左上角「文件」菜单 → 「导入 Excel」",
-            "3. 备份数据：定期复制 aeromat.db 和 photos/ 文件夹",
         ])
 
         sec("📋 日常操作", [
@@ -1354,11 +1400,12 @@ class AeroMatApp:
         sec("🔍 搜索与预警", [
             "搜索：在搜索框输入关键词（件号/描述/架位号），回车或点搜索",
             "",
-            "【低库存预警】",
+            "【低库存预警】（测试中）",
             "  • 默认规则：未手动设置时，最低库存 = 总数量 × 20%（最低为1）",
             "  • 视觉标记：主表格中，低库存行显示红色背景",
             "  • 手动设置：新增/编辑航材时，可手动填写最低库存数值",
             "  • 关闭预警：将最低库存设为0即可",
+            "  • 独立查询：菜单「查询」→「低库存预警」可查看所有低库存项及缺口",
             "",
             "【有效期预警】主表格「有效期提醒」列显示颜色标记",
             "  🟢 正常（>180天）  🟡 即将到期（90~180天）  🔴 到期（≤90天）",
@@ -1373,17 +1420,36 @@ class AeroMatApp:
         sec("📌 常见问题", [
             "Q：界面显示不全？→ 最大化窗口，或调整 Windows 显示缩放为100%",
             "Q：Windows 拦截程序？→ 点击「更多信息」→「仍要运行」",
-            "Q：如何备份？→ 复制整个程序文件夹（含 aeromat.db 和 photos/）",
+        ])
+
+        sec(f"💾 数据备份（{os.path.basename(DB_PATH)}）", [
+            "备份是保护数据安全最重要的一环，建议每周备份一次。",
+            "",
+            "【方法一：直接复制（推荐）】",
+            "  1. 关闭程序（确保数据库已保存）",
+            "  2. 复制整个程序文件夹到备份位置（U盘、移动硬盘或网盘）",
+            "  3. 关键文件：{db}（数据库）和 photos/（照片）".format(db=os.path.basename(DB_PATH)),
+            "",
+            "【方法二：仅备份数据文件】",
+            "  1. 关闭程序",
+            f"  2. 复制 {os.path.basename(DB_PATH)} 到安全位置",
+            "  3. 复制 photos/ 整个文件夹到安全位置",
+            "  4. 恢复时：将两个文件/文件夹放回程序同目录即可",
+            "",
+            "【方法三：导出 Excel 作为辅助备份】",
+            "  1. 程序内点击「文件」→「导出 Excel」",
+            "  2. 选择保存位置，生成 .xlsx 文件",
+            "  3. 注意：Excel 不含照片数据和出入库记录，建议配合方法一/二使用",
         ])
         sec("📝 版本更新记录", [
-            "v3.4  彻底删除个体件跟踪，只按数量管理库存；简化出库/入库/导入逻辑；删除个体件详情功能",
+            "v3.4  彻底删除个体件跟踪，只按数量管理库存；简化出库/入库/导入逻辑；新增低库存预警（测试中）",
             "v3.3  照片列支持点击直达图库；优化缩略图显示比例；修复全屏查看器关闭功能",
             "v3.2  主表格新增照片数量列；出入库记录入口调整至主界面；完善照片路径管理",
             "v3.1  优化界面布局，修复标题栏显示问题；新增出入库记录查询模块",
             "v3.0  系统重构：应用名称更新；新增照片管理功能；优化件号生成逻辑",
             "v2.0  数据库升级至 SQLite；新增件序号管理；新增库存预警功能；发布 Windows 打包版本",
             "v1.0  初始版本发布：实现航材基础信息管理功能",
-            "v1.0  初始版本发布：实现航材基础信息管理功能",
+            
         ])
 
         # 底部关闭按钮
