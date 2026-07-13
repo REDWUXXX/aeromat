@@ -558,34 +558,9 @@ class AeroMatApp:
                     ''', (part_number, description, quantity, unit, location,
                          min_stock, remark, now, now))
 
-                # 获取该件号+架位的现有最大序号
-                self.cursor.execute('''
-                WHERE part_number=? AND location=?
-                ''', (part_number, location))
-                max_result = self.cursor.fetchone()[0]
-                last_num = 0
-                if max_result:
-                    try:
-                        parts = max_result.rsplit('-', 1)
-                        last_num = int(parts[-1])
-                    except Exception:
-                        last_num = 0
-
-                # 批量生成个体件（新增，不影响已有）
-                new_items = max(item_count, quantity)
-                for i in range(1, new_items + 1):
-                    serial_num = f"{part_number}-{last_num + i:03d}"
-                    self.cursor.execute('''
-                    (part_number, location, serial_number, expiry_date, status, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, '正常', ?, ?)
-                    ''', (part_number, location, serial_num, expiry_date, now, now))
-
                 self.conn.commit()
 
-                msg = f"保存成功"
-                if new_items > 0:
-                    msg += f"\n已创建 {new_items} 个体件：{part_number}-{last_num+1:03d} ~ {part_number}-{last_num+new_items:03d}"
-                messagebox.showinfo("成功", msg)
+                messagebox.showinfo("成功", "保存成功")
                 dialog.destroy()
                 self.load_inventory()
             except Exception as e:
@@ -747,10 +722,7 @@ class AeroMatApp:
         location = values[4] if values[4] != '-' else None
 
         if messagebox.askyesno("确认",
-            f"确定要删除 {part_number}（架位: {location or '未指定'}）吗？\n"
-            "这将同时删除该位置所有个体件记录！"):
-            self.cursor.execute('''
-            ''', (part_number, location))
+            f"确定要删除 {part_number}（架位: {location or '未指定'}）吗？"):
             self.cursor.execute('''
             DELETE FROM inventory WHERE part_number=? AND (location=? OR (location IS NULL AND ? IS NULL))
             ''', (part_number, location, location))
@@ -991,11 +963,10 @@ class AeroMatApp:
             return
         item_data = tree.item(sel[0])
         serial = item_data['values'][0]
-        self.cursor.execute(
-            (part_number, serial))
-        record = self.cursor.fetchone()
-        if not record:
-            return
+        # 当前版本已移除 inventory_items 表，个体件编辑功能待实现
+        messagebox.showinfo("提示", "个体件编辑功能在当前版本中暂不可用")
+        return
+        record = None  # unreachable, kept for syntax
         dialog = tk.Toplevel(self.root)
         dialog.title(f"✏ 编辑个体件 - {serial}")
         dialog.geometry("460x480")
@@ -1501,16 +1472,11 @@ class AeroMatApp:
         today = datetime.now()
         alert_date = (today + timedelta(days=90)).strftime('%Y-%m-%d')
 
-        self.cursor.execute('''
-        SELECT ii.part_number, ii.serial_number, ii.location, ii.expiry_date, ii.status
-        WHERE ii.expiry_date IS NOT NULL AND ii.expiry_date != ''
-          AND ii.expiry_date <= ? AND ii.status = '正常'
-        ORDER BY ii.expiry_date ASC
-        ''', (alert_date,))
-        rows = self.cursor.fetchall()
+        # 有效期预警：当前版本 inventory 表中无 expiry_date 字段，跳过查询
+        rows = []
 
         if not rows:
-            ttk.Label(dialog, text="✅ 未来90天内没有到期航材", font=('Arial', 12)).pack(pady=30)
+            ttk.Label(dialog, text="✅ 未来90天内没有到期航材（当前版本未启用有效期字段）", font=('Arial', 12)).pack(pady=30)
             ttk.Button(dialog, text="关闭", command=dialog.destroy).pack(pady=10)
             return
 
@@ -1552,11 +1518,8 @@ class AeroMatApp:
         self.cursor.execute('SELECT COUNT(*) FROM inventory WHERE total_quantity <= min_stock AND min_stock > 0')
         low_stock_count = self.cursor.fetchone()[0]
 
-        self.cursor.execute('''
-        WHERE expiry_date IS NOT NULL AND expiry_date != ''
-          AND expiry_date <= date('now', '+90 days') AND status = '正常'
-        ''')
-        expiry_count = self.cursor.fetchone()[0]
+        # 有效期统计：当前版本 inventory 表中无 expiry_date 字段，设为 0
+        expiry_count = 0
 
         self.cursor.execute('SELECT COUNT(*) FROM transactions')
         trans_count = self.cursor.fetchone()[0]
